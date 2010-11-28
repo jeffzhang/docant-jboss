@@ -9,7 +9,7 @@
     <attribute name="srcDocName"/>
     <attribute name="pdfName"/>
     <sequential>
-      <delete dir="${basedir}/target/docbook/publish"/>
+      <delete dir="${docant.dir}/target/docbook/publish"/>
 
       <docant sourceDirectory="@{srcDir}" 
               sourceDocumentName="@{srcDocName}"
@@ -28,7 +28,7 @@
       </docant>
       <mkdir dir="${basedir}/target/publish/@{srcDir}"/>
 
-      <move file="${basedir}/target/docbook/publish" tofile="${basedir}/target/publish/@{srcDir}" failonerror="false"/>
+      <move file="${docant.dir}/target/docbook/publish" tofile="${basedir}/target/publish/@{srcDir}" failonerror="false"/>
 
     </sequential>
   </macrodef>
