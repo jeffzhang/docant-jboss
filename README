@@ -1,0 +1,10 @@
+Docant-JBoss
+============
+This project contains docbook document from JBoss projects
+
+Setup
+-----
+Get docant
+Get docant-jboss
+Use docant branch
+(hack for make docant running)
