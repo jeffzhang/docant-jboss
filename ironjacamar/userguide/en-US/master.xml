@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE book PUBLIC "-//OASIS//DTD DocBook XML V4.3CR3//EN"
-        "../../../tools/docbook/support/docbook-dtd/docbookx.dtd" [
+<!DOCTYPE book PUBLIC "-//OASIS//DTD DocBook XML V4.3//EN"
+              "http://www.oasis-open.org/docbook/xml/4.3/docbookx.dtd" [
         <!ENTITY dedication SYSTEM "modules/dedication.xml">
         <!ENTITY preface SYSTEM "modules/preface.xml">
         <!ENTITY introduction SYSTEM "modules/introduction.xml">
@@ -38,7 +38,6 @@
    &preface;
 
    &introduction;
-
    &download;
 
    &nc_installation;
@@ -52,15 +51,16 @@
    &validator;
 
    &codegenerator;
-
+<!--
    &embedded;
+-->
 
    &community;
 
    &troubleshooting;
 
    &schemas;
-
+<!--
    &sample;
-
+-->
 </book>
