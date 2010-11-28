@@ -1,4 +1,4 @@
-<project name="Manual" default="process" basedir="..">
+<project name="Docant-JBoss" default="process" basedir=".">
 
   <property name="build.dir" value="build"/>
   <property name="docant.dir" value="${basedir}/temp/docant"/>
@@ -13,7 +13,7 @@
 
       <docant sourceDirectory="@{srcDir}" 
               sourceDocumentName="@{srcDocName}"
-              baseOutputDirectory="target">
+              baseOutputDirectory="${docant.dir}/target">
 
 	<format name="html_single" 
 	stylesheetResource="classpath:/xslt/org/jboss/xhtml-single.xsl"
@@ -27,19 +27,19 @@
 	targetFinalName="@{pdfName}"/>
       </docant>
       <mkdir dir="${basedir}/target/publish/@{srcDir}"/>
-<!--
-      <move file="${basedir}/target/docbook/publish" tofile="${basedir}/target/publish/@{srcDir}"/>
--->
+
+      <move file="${basedir}/target/docbook/publish" tofile="${basedir}/target/publish/@{srcDir}" failonerror="false"/>
+
     </sequential>
   </macrodef>
 
   <target name="process">
 
-    <transformer srcDir="developerguide" 
+    <transformer srcDir="ironjacamar/developerguide" 
             srcDocName="master.xml"
             pdfName="ironjacamar_developerguide.pdf"/>
 
-    <transformer srcDir="userguide" 
+    <transformer srcDir="ironjacamar/userguide" 
             srcDocName="master.xml"
             pdfName="ironjacamar_userguide.pdf"/>
 
