@@ -1,0 +1,46 @@
+<project name="Manual" default="process" basedir="..">
+
+  <property name="build.dir" value="build"/>
+  <import file="${basedir}/temp/docant/support.xml"/>
+
+  <macrodef name="transformer">
+    <attribute name="srcDir"/>
+    <attribute name="srcDocName"/>
+    <attribute name="pdfName"/>
+    <sequential>
+      <delete dir="${basedir}/target/docbook/publish"/>
+
+      <docant sourceDirectory="@{srcDir}" 
+              sourceDocumentName="@{srcDocName}"
+              baseOutputDirectory="target">
+
+	<format name="html_single" 
+	stylesheetResource="classpath:/xslt/org/jboss/xhtml-single.xsl"
+	targetFinalName="index.html"/>
+
+	<format name="html" 
+	stylesheetResource="classpath:/xslt/org/jboss/xhtml.xsl"
+	targetFinalName="index.html"/>
+	<format name="pdf" 
+	stylesheetResource="classpath:/xslt/org/jboss/pdf.xsl"
+	targetFinalName="@{pdfName}"/>
+      </docant>
+      <mkdir dir="${basedir}/target/publish/@{srcDir}"/>
+      <move file="${basedir}/target/docbook/publish" tofile="${basedir}/target/publish/@{srcDir}"/>
+
+    </sequential>
+  </macrodef>
+
+  <target name="process">
+
+    <transformer srcDir="developerguide" 
+            srcDocName="master.xml"
+            pdfName="ironjacamar_developerguide.pdf"/>
+
+    <transformer srcDir="userguide" 
+            srcDocName="master.xml"
+            pdfName="ironjacamar_userguide.pdf"/>
+
+  </target>
+
+</project>
