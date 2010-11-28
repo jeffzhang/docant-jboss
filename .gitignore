@@ -1,0 +1,11 @@
+.classpath
+
+# /
+/build
+/target
+/reports
+/temp
+
+# /lib/
+/lib
+/down
