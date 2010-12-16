@@ -36,11 +36,11 @@
   <target name="process">
 
     <transformer srcDir="ironjacamar/developerguide" 
-            srcDocName="master.xml"
+            srcDocName="developerguide.xml"
             pdfName="ironjacamar_developerguide.pdf"/>
 
     <transformer srcDir="ironjacamar/userguide" 
-            srcDocName="master.xml"
+            srcDocName="userguide.xml"
             pdfName="ironjacamar_userguide.pdf"/>
 
   </target>
