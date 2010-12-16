@@ -72,8 +72,9 @@ $IRON_JACAMAR_HOME/lib/embedded/arquillian
         <para>The code sample below shows a simple usage of deploying a pre-assembled resource adapter archive
           into the IronJacamar Embedded environment.</para>
 
-        <programlisting>
-import org.jboss.jca.embedded.EmbeddedJCA;
+        <programlisting language="java">
+import org.jboss.jca.embedded.Embedded;
+import org.jboss.jca.embedded.EmbeddedFactory;
 
 import java.net.URL;
 
@@ -89,7 +90,7 @@ import static org.junit.Assert.*;
 public class MyTestCase
 {
    /** Embedded */
-   private static EmbeddedJCA embedded;
+   private static Embedded embedded;
 
    /** JNDI prefix */
    private static final String JNDI_PREFIX = "java:/eis/";
@@ -139,7 +140,7 @@ public class MyTestCase
    public static void beforeClass() throws Throwable
    {
       // Create an embedded JCA instance
-      embedded = new EmbeddedJCA();
+      embedded = EmbeddedFactory.create();
 
       // Startup
       embedded.startup();
@@ -154,10 +155,10 @@ public class MyTestCase
 }
         </programlisting>
 
-        <callout>
+
           <note>Note that, the url for the archive must end with the <code>.rar</code> extension
             - either representing a file or a directory.</note>
-        </callout>
+
 
         <para>See the IronJacamar Embedded API documentation for additional functionality.</para>
 
@@ -171,7 +172,7 @@ public class MyTestCase
           
           <para>This done by using the following code snippet</para>
 
-          <programlisting>
+          <programlisting language="java">
 import org.jboss.jca.deployers.fungal.RAActivator;
 
 // Disable RAActivator
@@ -222,9 +223,10 @@ raa.setEnabled(true);
           <para>The code sample below shows an advanced usage of deploying a dynamic ShrinkWrap resource adapter archive
             into the IronJacamar Embedded environment.</para>
 
-          <programlisting>
+          <programlisting language="java">
 <![CDATA[
-import org.jboss.jca.embedded.EmbeddedJCA;
+import org.jboss.jca.embedded.Embedded;
+import org.jboss.jca.embedded.EmbeddedFactory;
 import org.jboss.jca.embedded.rars.simple.MessageListener;
 import org.jboss.jca.embedded.rars.simple.TestActivationSpec;
 import org.jboss.jca.embedded.rars.simple.TestConnection;
@@ -254,7 +256,7 @@ public class ShrinkWrapTestCase
    private static Logger log = Logger.getLogger(ShrinkWrapTestCase.class);
 
    /** Embedded */
-   private static EmbeddedJCA embedded;
+   private static Embedded embedded;
 
    /** JNDI prefix */
    private static final String JNDI_PREFIX = "java:/eis/";
@@ -323,7 +325,7 @@ public class ShrinkWrapTestCase
    public static void beforeClass() throws Throwable
    {
       // Create and set an embedded JCA instance
-      embedded = new EmbeddedJCA();
+      embedded = EmbeddedFactory.create();
 
       // Startup
       embedded.startup();
@@ -346,10 +348,10 @@ public class ShrinkWrapTestCase
 ]]>
           </programlisting>
           
-          <callout>
+
             <note>Note that, the name for the <code>ResourceAdapterArchive</code> must end with the
               <code>.rar</code> extension.</note>
-          </callout>
+
           
           <para>See the <ulink url="http://www.jboss.org/community/wiki/ShrinkWrap">
               ShrinkWrap</ulink> web site for a full description of the project and additional documentation.</para>
@@ -365,7 +367,7 @@ public class ShrinkWrapTestCase
           <para>This setup allows the developer to skip the entire IronJacamar Embedded container setup and handling of its
             lifecycle methods.</para>
 
-          <programlisting>
+          <programlisting language="java">
 <![CDATA[
 package org.jboss.jca.embedded.unit;
 
@@ -454,10 +456,10 @@ public class ArquillianTestCase
 ]]>
           </programlisting>
           
-          <callout>
+
             <note>Note that, the name for the <code>ResourceAdapterArchive</code> must end with the
               <code>.rar</code> extension.</note>
-          </callout>
+
           
           <para>See the <ulink url="http://community.jboss.org/en/arquillian">
               Arquillian</ulink> web site for a full description of the project and additional documentation.</para>
