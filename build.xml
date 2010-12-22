@@ -34,7 +34,7 @@
   </macrodef>
 
   <target name="process">
-
+<!-- ironjacamar
     <transformer srcDir="ironjacamar/developerguide" 
             srcDocName="developerguide.xml"
             pdfName="ironjacamar_developerguide.pdf"/>
@@ -42,6 +42,43 @@
     <transformer srcDir="ironjacamar/userguide" 
             srcDocName="userguide.xml"
             pdfName="ironjacamar_userguide.pdf"/>
+-->
+
+<!-- jbossas
+    <transformer srcDir="jbossas/6/Admin_Console_Guide" 
+            srcDocName="Admin_Console_Guide.xml"
+            pdfName="Admin_Console_Guide.pdf"/>
+
+    <transformer srcDir="jbossas/6/Clustering_Guide" 
+            srcDocName="Clustering_Guide.xml"
+            pdfName="Clustering_Guide.pdf"/>
+
+    <transformer srcDir="jbossas/6/JCA_Guide" 
+            srcDocName="JCA_Guide.xml"
+            pdfName="JCA_Guide.pdf"/>
+
+    <transformer srcDir="jbossas/6/Performance_Tuning_Guide" 
+            srcDocName="Performance_Tuning_Guide.xml"
+            pdfName="Performance_Tuning_Guide.pdf"/>
+
+    <transformer srcDir="jbossas/6/WebServices_Guide" 
+            srcDocName="WebServices_Guide.xml"
+            pdfName="WebServices_Guide.pdf"/>
+-->
+<!-- wrong
+    <transformer srcDir="jbossas/6/Installation_And_Getting_Started_Guide" 
+            srcDocName="Installation_And_Getting_Started_Guide.xml"
+            pdfName="Installation_And_Getting_Started_Guide.pdf"/>
+
+    <transformer srcDir="jbossas/6/JSF_Guide" 
+            srcDocName="JSF_Guide.xml"
+            pdfName="JSF_Guide.pdf"/>
+
+    <transformer srcDir="jbossas/6/Security_Guide" 
+            srcDocName="Security_Guide.xml"
+            pdfName="Security_Guide.pdf"/>
+-->
+
 
   </target>
 
