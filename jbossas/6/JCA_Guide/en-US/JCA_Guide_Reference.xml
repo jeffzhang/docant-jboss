@@ -1,0 +1,526 @@
+<?xml version='1.0'?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+]>
+
+<chapter id="Connectors_on_JBoss">
+	<title>Connectors on JBoss</title>
+	<subtitle>The JCA Configuration and Architecture</subtitle>
+	<para>
+		This chapter discusses the JBoss server implementation of the JavaEE Connector Architecture (JCA). JCA is a resource manager integration API whose goal is to standardize access to non-relational resources in the same way the JDBC API standardized access to relational data. The purpose of this chapter is to introduce the utility of the JCA APIs and then describe the architecture of JCA in JBoss
+	</para>
+	<section id="Connectors_on_JBoss-An_Overview_of_the_JBoss_JCA_Architecture">
+		<title>An Overview of the JBoss JCA Architecture</title>
+		<para>
+			The JBoss JCA framework provides the application server architecture extension required for the use of JCA resource adaptors. This is primarily a connection pooling and management extension along with a number of MBeans for loading resource adaptors into the JBoss server.
+		</para>
+		<para>
+			There are three coupled MBeans that make up a RAR deployment. These are the <literal>org.jboss.resource.deployment.RARDeployment</literal>, <literal>org.jboss.resource.connectionmanager.RARDeployment</literal>, and <literal>org.jboss.resource.connectionmanager.BaseConnectionManager2</literal>. The <literal>org.jboss.resource.deployment.RARDeployment</literal> is simply an encapsulation of the metadata of a RAR <literal>META-INF/ra.xml</literal> descriptor. It exposes this information as a DynamicMBean simply to make it available to the <literal>org.jboss.resource.connectionmanager.RARDeployment</literal> MBean.
+		</para>
+		<para>
+			The RARDeployer service handles the deployment of archives files containing resource adaptors (RARs). It creates the <literal>org.jboss.resource.deployment.RARDeployment</literal> MBeans when a RAR file is deployed. Deploying the RAR file is the first step in making the resource adaptor available to application components. For each deployed RAR, one or more connection factories must be configured and bound into JNDI. This task performed using a JBoss service descriptor that sets up a <literal>org.jboss.resource.connectionmanager.BaseConnectionManager2</literal> MBean implementation with a <literal>org.jboss.resource.connectionmgr.RARDeployment</literal> dependent.
+		</para>
+		<section id="An_Overview_of_the_JBoss_JCA_Architecture-BaseConnectionManager2_MBean">
+			<title>BaseConnectionManager2 MBean</title>
+			<para>
+				The <literal>org.jboss.resource.connectionmanager.BaseConnectionManager2</literal> MBean is a base class for the various types of connection managers required by the JCA spec. Subclasses include <literal>NoTxConnectionManager</literal>, <literal>LocalTxConnectionManager</literal> and <literal>XATxConnectionManager</literal>. These correspond to resource adaptors that support no transactions, local transaction and XA transaction respectively. You choose which subclass to use based on the type of transaction semantics you want, provided the JCA resource adaptor supports the corresponding transaction capability.
+			</para>
+			<para>
+				The common attributes supported by the BaseConnectionManager2 MBean are:
+			</para>
+			<itemizedlist>
+				<listitem>
+					<para>
+						<emphasis role="bold">ManagedConnectionPool</emphasis>: This specifies the ObjectName of the MBean representing the pool for this connection manager. The MBean must have an <literal>ManagedConnectionPool</literal> attribute that is an implementation of the <literal>org.jboss.resource.connectionmanager.ManagedConnectionPool</literal> interface. Normally it will be an embedded MBean in a depends tag rather than an <literal>ObjectName</literal> reference to an existing MBean. The default MBean for use is the <literal>org.jboss.resource.connectionmanager.JBossManagedConnectionPool</literal>. Its configurable attributes are discussed below.
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						<emphasis role="bold">CachedConnectionManager</emphasis>: This specifies the <literal>ObjectName</literal> of the <literal>CachedConnectionManager</literal> MBean implementation used by the connection manager. Normally this is specified using a depends tag with the <literal>ObjectName</literal> of the unique <literal>CachedConnectionManager</literal> for the server. The name <literal>jboss.jca:service=CachedConnectionManager</literal> is the standard setting to use.
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						<emphasis role="bold">SecurityDomainJndiName</emphasis>: This specifies the JNDI name of the security domain to use for authentication and authorization of resource connections. This is typically of the form <literal>java:/jaas/&lt;domain&gt;</literal> where the <literal>&lt;domain&gt;</literal> value is the name of an entry in the <literal>conf/login-config.xml</literal> JAAS login module configuration file. This defines which JAAS login modules execute to perform authentication.
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						<emphasis role="bold">JaasSecurityManagerService</emphasis>: This is the <literal>ObjectName</literal> of the security manager service. This should be set to the security manager MBean name as defined in the <literal>conf/jboss-service.xml</literal> descriptor, and currently this is <literal>jboss.security:service=JaasSecurityManager</literal>. This attribute will likely be removed in the future.
+					</para>
+				</listitem>
+			</itemizedlist>
+		</section>
+		
+		<section id="An_Overview_of_the_JBoss_JCA_Architecture-RARDeployment_MBean">
+			<title>RARDeployment MBean</title>
+			<para>
+				The <literal>org.jboss.resource.connectionmanager.RARDeployment</literal> MBean manages configuration and instantiation <literal>ManagedConnectionFactory</literal> instance. It does this using the resource adaptor metadata settings from the RAR <literal>META-INF/ra.xml</literal> descriptor along with the <literal>RARDeployment</literal> attributes. The configurable attributes are:
+			</para>
+			<itemizedlist>
+				<listitem>
+					<para>
+						<emphasis role="bold">OldRarDeployment</emphasis>: This is the <literal>ObjectName</literal> of the <literal>org.jboss.resource.RarDeployment</literal> MBean that contains the resource adaptor metadata. The form of this name is <literal>jboss.jca:service=RARDeployment,name=&lt;ra-display-name&gt;</literal> where the <literal>&lt;ra-display-name&gt;</literal> is the <literal>ra.xml</literal> descriptor <literal>display-name</literal> attribute value. The <literal>RARDeployer</literal> creates this when it deploys a RAR file. This attribute will likely be removed in the future.
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						<emphasis role="bold">ManagedConnectionFactoryProperties</emphasis>: This is a collection of (name, type, value) triples that define attributes of the <literal>ManagedConnectionFactory</literal> instance. Therefore, the names of the attributes depend on the resource adaptor <literal>ManagedConnectionFactory</literal> instance. The following example shows the structure of the content of this attribute.
+					</para>
+<programlisting>&lt;properties&gt;
+    &lt;config-property&gt;
+        &lt;config-property-name&gt;Attr0Name&lt;/config-property-name&gt;
+        &lt;config-property-type&gt;Attr0Type&lt;/config-property-type&gt;
+        &lt;config-property-value&gt;Attr0Value&lt;/config-property-value&gt;
+    &lt;/config-property&gt;
+    &lt;config-property&gt;
+        &lt;config-property-name&gt;Attr1Name&lt;/config-property-name&gt;
+        &lt;config-property-type&gt;Attr2Type&lt;/config-property-type&gt;
+        &lt;config-property-value&gt;Attr2Value&lt;/config-property-value&gt;
+    &lt;/config-property&gt; 
+    ...
+&lt;/properties&gt;  
+</programlisting>
+					<para>
+						<literal>AttrXName</literal> is the Xth attribute name, <literal>AttrXType</literal> is the fully qualified Java type of the attribute, and <literal>AttrXValue</literal> is the string representation of the value. The conversion from string to <literal>AttrXType</literal> is done using the <literal>java.beans.PropertyEditor</literal> class for the <literal>AttrXType</literal>.
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						<emphasis role="bold">JndiName</emphasis>: This is the JNDI name under which the resource adaptor will be made available. Clients of the resource adaptor use this name to obtain either the <literal>javax.resource.cci.ConnectionFactory</literal> or resource adaptor specific connection factory. The full JNDI name will be <literal>java:/&lt;JndiName&gt;</literal> meaning that the <literal>JndiName</literal> attribute value will be prefixed with <literal>java:/</literal>. This prevents use of the connection factory outside of the JBoss server VM. In the future this restriction may be configurable.
+					</para>
+				</listitem>
+			</itemizedlist>
+		</section>
+		
+		<section id="An_Overview_of_the_JBoss_JCA_Architecture-JBossManagedConnectionPool_MBean">
+			<title>JBossManagedConnectionPool MBean</title>
+			<para>
+				The <literal>org.jboss.resource.connectionmanager.JBossManagedConnectionPool</literal> MBean is a connection pooling MBean. It is typically used as the embedded MBean value of the <literal>BaseConnectionManager2</literal><literal>ManagedConnectionPool</literal> attribute. When you setup a connection manager MBean you typically embed the pool configuration in the connection manager descriptor. The configurable attributes of the <literal>JBossManagedConnectionPool</literal> are:
+			</para>
+			<itemizedlist>
+				<listitem>
+					<para>
+						<emphasis role="bold">ManagedConnectionFactoryName</emphasis>: This specifies the <literal>ObjectName</literal> of the MBean that creates <literal>javax.resource.spi.ManagedConnectionFactory</literal> instances. Normally this is configured as an embedded MBean in a depends element rather than a separate MBean reference using the <literal>RARDeployment</literal> MBean. The MBean must provide an appropriate <literal>startManagedConnectionFactory</literal> operation.
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						<emphasis role="bold">MinSize</emphasis>: This attribute indicates the minimum number of connections this pool should hold. These are not created until a <literal>Subject</literal> is known from a request for a connection. <literal>MinSize</literal> connections will be created for each sub-pool.
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						<emphasis role="bold">MaxSize</emphasis>: This attribute indicates the maximum number of connections for a pool. No more than MaxSize connections will be created in each sub-pool.
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						<emphasis role="bold">BlockingTimeoutMillis</emphasis>: This attribute indicates the maximum time to block while waiting for a connection before throwing an exception. Note that this blocks only while waiting for a permit for a connection, and will never throw an exception if creating a new connection takes an inordinately long time.
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						<emphasis role="bold">IdleTimeoutMinutes</emphasis>: This attribute indicates the maximum time a connection may be idle before being closed. The actual maximum time depends also on the idle remover thread scan time, which is 1/2 the smallest idle timeout of any pool.
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						<emphasis role="bold">NoTxSeparatePools</emphasis>: Setting this to true doubles the available pools. One pool is for connections used outside a transaction the other inside a transaction. The actual pools are lazily constructed on first use. This is only relevant when setting the pool parameters associated with the <literal>LocalTxConnectionManager</literal> and <literal>XATxConnectionManager</literal>. Its use case is for Oracle (and possibly other vendors) XA implementations that don&#39;t like using an XA connection with and without a JTA transaction.
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						<emphasis role="bold">Criteria</emphasis>: This attribute indicates if the JAAS <literal>javax.security.auth.Subject</literal> from security domain associated with the connection, or app supplied parameters (such as from <literal>getConnection(user, pw)</literal>) are used to distinguish connections in the pool. The allowed values are:
+					</para>
+					<itemizedlist spacing="compact">
+						<listitem>
+							<para>
+								<emphasis role="bold">ByContainer</emphasis>: use <literal>Subject</literal>
+							</para>
+						</listitem>
+						<listitem>
+							<para>
+								<emphasis role="bold">ByApplication</emphasis>: use application supplied parameters only
+							</para>
+						</listitem>
+						<listitem>
+							<para>
+								<emphasis role="bold">ByContainerAndApplication</emphasis>: use both
+							</para>
+						</listitem>
+						<listitem>
+							<para>
+								<emphasis role="bold">ByNothing</emphasis>: all connections are equivalent, usually if adapter supports reauthentication
+							</para>
+						</listitem>
+					</itemizedlist>
+				</listitem>
+			</itemizedlist>
+		</section>
+		
+		<section id="An_Overview_of_the_JBoss_JCA_Architecture-CachedConnectionManager_MBean">
+			<title>CachedConnectionManager MBean</title>
+			<para>
+				The <literal>org.jboss.resource.connectionmanager.CachedConnectionManager</literal> MBean manages associations between meta-aware objects (those accessed through interceptor chains) and connection handles, as well as between user transactions and connection handles. Normally there should only be one such MBean, and this is configured in the core <literal>jboss-service.xml</literal> descriptor. It is used by <literal>CachedConnectionInterceptor</literal>, JTA <literal>UserTransaction</literal> implementation and all <literal>BaseConnectionManager2</literal> instances. The configurable attributes of the <literal>CachedConnectionManager</literal> MBean are:
+			</para>
+			<itemizedlist>
+				<listitem>
+					<para>
+						<emphasis role="bold">SpecCompliant</emphasis>: Enable this boolean attribute for spec compliant non-shareable connections reconnect processing. This allows a connection to be opened in one call and used in another. Note that specifying this behavior disables connection close processing.
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						<emphasis role="bold">Debug</emphasis>: Enable this boolean property for connection close processing. At the completion of an EJB method invocation, unclosed connections are registered with a transaction synchronization. If the transaction ends without the connection being closed, an error is reported and JBoss closes the connection. This is a development feature that should be turned off in production for optimal performance.
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						<emphasis role="bold">TransactionManagerServiceName</emphasis>: This attribute specifies the JMX <literal>ObjectName</literal> of the JTA transaction manager service. Connection close processing is now synchronized with the transaction manager and this attribute specifies the transaction manager to use.
+					</para>
+				</listitem>
+			</itemizedlist>
+		</section>
+		
+		<section id="An_Overview_of_the_JBoss_JCA_Architecture-A_Sample_Skeleton_JCA_Resource_Adaptor">
+			<title>A Sample Skeleton JCA Resource Adaptor</title>
+			<para>
+				To conclude our discussion of the JBoss JCA framework we will create and deploy a single non-transacted resource adaptor that simply provides a skeleton implementation that stubs out the required interfaces and logs all method calls. We will not discuss the details of the requirements of a resource adaptor provider as these are discussed in detail in the JCA specification. The purpose of the adaptor is to demonstrate the steps required to create and deploy a RAR in JBoss, and to see how JBoss interacts with the adaptor.
+			</para>
+			<para>
+				The adaptor we will create could be used as the starting point for a non-transacted file system adaptor. The source to the example adaptor can be found in the <literal>src/main/org/jboss/book/jca/ex1</literal> directory of the book examples. A class diagram that shows the mapping from the required <literal>javax.resource.spi</literal> interfaces to the resource adaptor implementation is given in <xref linkend="A_Sample_Skeleton_JCA_Resource_Adaptor-The_file_system_RAR_class_diagram" />.
+			</para>
+			<figure id="A_Sample_Skeleton_JCA_Resource_Adaptor-The_file_system_RAR_class_diagram">
+				<title>The file system RAR class diagram</title>
+				<mediaobject>
+					<imageobject>
+						<imagedata align="center" fileref="images/javaee_chap7-7.jpg" />
+					</imageobject>
+				</mediaobject>
+			</figure>
+			<para>
+				We will build the adaptor, deploy it to the JBoss server and then run an example client against an EJB that uses the resource adaptor to demonstrate the basic steps in a complete context. We&#39;ll then take a look at the JBoss server log to see how the JBoss JCA framework interacts with the resource adaptor to help you better understand the components in the JCA system level contract.
+			</para>
+			<para>
+				To build the example and deploy the RAR to the JBoss server <literal>deploy/lib</literal> directory, execute the following Ant command in the book examples directory.
+			</para>
+<programlisting>[examples]$ ant -Dchap=jca build-chap</programlisting>
+			<para>
+				The deployed files include a <literal>jca-ex1.sar</literal> and a <literal>notxfs-service.xml</literal> service descriptor. The example resource adaptor deployment descriptor is shown in <xref linkend="A_Sample_Skeleton_JCA_Resource_Adaptor-The_nontransactional_file_system_resource_adaptor_deployment_descriptor." />.
+			</para>
+			<example id="A_Sample_Skeleton_JCA_Resource_Adaptor-The_nontransactional_file_system_resource_adaptor_deployment_descriptor."><title>The nontransactional file system resource adaptor deployment descriptor.</title>
+<programlisting>&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;connector xmlns="http://java.sun.com/xml/ns/connector
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://java.sun.com/xml/ns/j2ee 
+                        http://java.sun.com/xml/ns/j2ee/connector_1_5.xsd" version="1.5"&gt;
+    &lt;display-name&gt;File System Adapter&lt;/display-name&gt;
+    &lt;vendor-name&gt;JBoss&lt;/vendor-name&gt;
+    &lt;eis-type&gt;FileSystem&lt;/eis-type&gt;
+    &lt;resourceadapter-version&gt;1.0&lt;/resourceadapter-version&gt;
+    &lt;license&gt;
+        &lt;description&gt;LGPL&lt;/description&gt;
+        &lt;license-required&gt;false&lt;/license-required&gt;
+    &lt;/license&gt;
+    &lt;resourceadapter&gt;
+        &lt;resourceadapter-class&gt;
+            org.jboss.resource.deployment.DummyResourceAdapter
+        &lt;/resourceadapter-class&gt;
+        &lt;outbound-resourceadapter&gt;
+            &lt;connection-definition&gt;
+                <emphasis role="bold">&lt;managedconnectionfactory-class&gt; org.jboss.book.jca.ex1.ra.FSManagedConnectionFactory &lt;/managedconnectionfactory-class&gt;</emphasis>
+                &lt;config-property&gt;
+                    &lt;config-property-name&gt;FileSystemRootDir&lt;/config-property-name&gt;
+                    &lt;config-property-type&gt;java.lang.String&lt;/config-property-type&gt;
+                    &lt;config-property-value&gt;/tmp/db/fs_store&lt;/config-property-value&gt;
+                &lt;/config-property&gt;
+                &lt;config-property&gt;
+                    &lt;config-property-name&gt;UserName&lt;/config-property-name&gt;
+                    &lt;config-property-type&gt;java.lang.String&lt;/config-property-type&gt;
+                    &lt;config-property-value/&gt;
+                &lt;/config-property&gt;
+                &lt;config-property&gt;
+                    &lt;config-property-name&gt;Password&lt;/config-property-name&gt;
+                    &lt;config-property-type&gt;java.lang.String&lt;/config-property-type&gt;
+                    &lt;config-property-value/&gt;
+                &lt;/config-property&gt;
+                <emphasis role="bold">&lt;connectionfactory-interface&gt; org.jboss.book.jca.ex1.ra.DirContextFactory &lt;/connectionfactory-interface&gt; &lt;connectionfactory-impl-class&gt; org.jboss.book.jca.ex1.ra.DirContextFactoryImpl &lt;/connectionfactory-impl-class&gt; &lt;connection-interface&gt; javax.naming.directory.DirContext &lt;/connection-interface&gt; &lt;connection-impl-class&gt; org.jboss.book.jca.ex1.ra.FSDirContext &lt;/connection-impl-class&gt;</emphasis>
+            &lt;/connection-definition&gt;
+            &lt;transaction-support&gt;NoTransaction&lt;/transaction-support&gt;
+            &lt;authentication-mechanism&gt;
+                &lt;authentication-mechanism-type&gt;BasicPassword&lt;/authentication-mechanism-type&gt;
+                &lt;credential-interface&gt;
+                    javax.resource.spi.security.PasswordCredential
+                &lt;/credential-interface&gt;
+            &lt;/authentication-mechanism&gt;
+            <emphasis role="bold">&lt;reauthentication-support&gt;true&lt;/reauthentication-support&gt;</emphasis>
+        &lt;/outbound-resourceadapter&gt;
+        &lt;security-permission&gt;
+            &lt;description&gt; Read/Write access is required to the contents of the
+                FileSystemRootDir &lt;/description&gt;
+            &lt;security-permission-spec&gt; permission java.io.FilePermission
+                "/tmp/db/fs_store/*", "read,write"; 
+            &lt;/security-permission-spec&gt;
+        &lt;/security-permission&gt;
+    &lt;/resourceadapter&gt;
+&lt;/connector&gt;
+</programlisting>
+			</example><para>
+				The key items in the resource adaptor deployment descriptor are highlighted in bold. These define the classes of the resource adaptor, and the elements are:
+			</para>
+			<itemizedlist>
+				<listitem>
+					<para>
+						<emphasis role="bold">managedconnectionfactory-class</emphasis>: The implementation of the <literal>ManagedConnectionFactory</literal> interface, <literal>org.jboss.book.jca.ex1.ra.FSManagedConnectionFactory</literal>
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						<emphasis role="bold">connectionfactory-interface</emphasis>: This is the interface that clients will obtain when they lookup the connection factory instance from JNDI, here a proprietary resource adaptor value, <literal>org.jboss.book.jca.ex1.ra.DirContextFactory</literal>. This value will be needed when we create the JBoss <literal>ds.xml</literal> to use the resource.
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						<emphasis role="bold">connectionfactory-impl-class</emphasis>: This is the class that provides the implementation of the <literal>connectionfactory-interface</literal>, <literal>org.jboss.book.jca.ex1.ra.DirContextFactoryImpl</literal>.
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						<emphasis role="bold">connection-interface</emphasis>: This is the interface for the connections returned by the resource adaptor connection factory, here the JNDI <literal>javax.naming.directory.DirContext</literal> interface.
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						<emphasis role="bold">connection-impl-class</emphasis>: This is he class that provides the <literal>connection-interface</literal> implementation, <literal>org.jboss.book.jca.ex1.ra.FSDirContext</literal>.
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						<emphasis role="bold">transaction-support</emphasis>: The level of transaction support, here defined as <literal>NoTransaction</literal>, meaning the file system resource adaptor does not do transactional work.
+					</para>
+				</listitem>
+			</itemizedlist>
+			<para>
+				The RAR classes and deployment descriptor only define a resource adaptor. To use the resource adaptor it must be integrated into the JBoss application server using a <literal>ds.xml</literal> descriptor file. An example of this for the file system adaptor is shown in <xref linkend="A_Sample_Skeleton_JCA_Resource_Adaptor-The_notxfs_ds.xml_resource_adaptor_MBeans_service_descriptor." />.
+			</para>
+			<example id="A_Sample_Skeleton_JCA_Resource_Adaptor-The_notxfs_ds.xml_resource_adaptor_MBeans_service_descriptor."><title>The notxfs-ds.xml resource adaptor MBeans service descriptor.</title>
+<programlisting>&lt;!DOCTYPE connection-factories PUBLIC
+          "-//JBoss//DTD JBOSS JCA Config 1.5//EN"
+          "http://www.jboss.org/j2ee/dtd/jboss-ds_1_5.dtd"&gt;
+&lt;!--   
+       The non-transaction FileSystem resource adaptor service configuration
+--&gt;
+&lt;connection-factories&gt;
+    &lt;no-tx-connection-factory&gt;
+        &lt;jndi-name&gt;NoTransFS&lt;/jndi-name&gt;
+        &lt;rar-name&gt;jca-ex1.rar&lt;/rar-name&gt;
+        &lt;connection-definition&gt;
+             org.jboss.book.jca.ex1.ra.DirContextFactory
+        &lt;/connection-definition&gt;
+        &lt;config-property name="FileSystemRootDir"
+                         type="java.lang.String"&gt;/tmp/db/fs_store&lt;/config-property&gt;
+    &lt;/no-tx-connection-factory&gt;
+&lt;/connection-factories&gt;
+</programlisting>
+			</example><para>
+				The main attributes are:
+			</para>
+			<itemizedlist>
+				<listitem>
+					<para>
+						<emphasis role="bold">jndi-name</emphasis>: This specifies where the connection factory will be bound into JNDI. For this deployment that binding will be <literal>java:/NoTransFS</literal>.
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						<emphasis role="bold">rar-name</emphasis>: This is the name of the RAR file that contains the definition for the resource we want to provide. For nested RAR files, the name would look like <literal>myapplication.ear#my.rar</literal>. In this example, it is simply <literal>jca-ex1.rar</literal>.
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						<emphasis role="bold">connection-definition</emphasis>: This is the connection factory interface class. It should match the <literal>connectionfactory-interface</literal> in the <literal>ra.xml</literal> file. Here our connection factory interface is <literal>org.jboss.book.jca.ex1.ra.DirContextFactory</literal>.
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						<emphasis role="bold">config-property</emphasis>: This can be used to provide non-default settings to the resource adaptor connection factory. Here the <literal>FileSystemRootDir</literal> is being set to <literal>/tmp/db/fs_store</literal>. This overrides the default value in the <literal>ra.xml</literal> file.
+					</para>
+				</listitem>
+			</itemizedlist>
+			<para>
+				To deploy the RAR and connection manager configuration to the JBoss server, run the following:
+			</para>
+<programlisting>[examples]$ ant -Dchap=jca config</programlisting>
+			<para>
+				The server console will display some logging output indicating that the resource adaptor has been deployed.
+			</para>
+			<para>
+				Now we want to test access of the resource adaptor by a JavaEE component. To do this we have created a trivial stateless session bean that has a single method called <literal>echo</literal>. Inside of the <literal>echo</literal> method the EJB accesses the resource adaptor connection factory, creates a connection, and then immediately closes the connection. The <literal>echo</literal> method code is shown below.
+			</para>
+			<example id="A_Sample_Skeleton_JCA_Resource_Adaptor-The_stateless_session_bean_echo_method_code_that_shows_the_access_of_the_resource_adaptor_connection_factory."><title>The stateless session bean echo method code that shows the access of the resource adaptor connection factory.</title>
+<programlisting>public String echo(String arg)
+{
+    log.info("echo, arg="+arg);
+    try {
+        InitialContext ctx = new InitialContext();
+        Object         ref = ctx.lookup("java:comp/env/ra/DirContextFactory");
+        log.info("echo, ra/DirContextFactory=" + ref);
+
+        DirContextFactory dcf = (DirContextFactory) ref;
+        log.info("echo, found dcf=" + dcf);
+
+        DirContext dc = dcf.getConnection();
+        log.info("echo, lookup dc=" + dc);
+
+        dc.close();
+    } catch(NamingException e) {
+        log.error("Failed during JNDI access", e);
+    }
+    return arg;
+}
+</programlisting>
+			</example><para>
+				The EJB is not using the CCI interface to access the resource adaptor. Rather, it is using the resource adaptor specific API based on the proprietary <literal>DirContextFactory</literal> interface that returns a JNDI <literal>DirContext</literal> object as the connection object. The example EJB is simply exercising the system contract layer by looking up the resource adaptor connection factory, creating a connection to the resource and closing the connection. The EJB does not actually do anything with the connection, as this would only exercise the resource adaptor implementation since this is a non-transactional resource.
+			</para>
+			<para>
+				Run the test client which calls the <literal>EchoBean.echo</literal> method by running Ant as follows from the examples directory:
+			</para>
+<programlisting>[examples]$ ant -Dchap=jca -Dex=1 run-example</programlisting>
+			<para>
+				You&#39;ll see some output from the bean in the system console, but much more detailed logging output can be found in the <literal>server/production/log/server.log</literal> file. Don&#39;t worry if you see exceptions. They are just stack traces to highlight the call path into parts of the adaptor. To help understand the interaction between the adaptor and the JBoss JCA layer, we&#39;ll summarize the events seen in the log using a sequence diagram. <xref linkend="A_Sample_Skeleton_JCA_Resource_Adaptor-A_sequence_diagram_illustrating_the_key_interactions_between_the_JBoss_JCA_framework_and_the_example_resource_adaptor_that_result_when_the_EchoBean_accesses_the_resource_adaptor_connection_factory." /> is a sequence diagram that summarizes the events that occur when the <literal>EchoBean</literal> accesses the resource adaptor connection factory from JNDI and creates a connection.
+			</para>
+			<figure id="A_Sample_Skeleton_JCA_Resource_Adaptor-A_sequence_diagram_illustrating_the_key_interactions_between_the_JBoss_JCA_framework_and_the_example_resource_adaptor_that_result_when_the_EchoBean_accesses_the_resource_adaptor_connection_factory.">
+				<title>A sequence diagram illustrating the key interactions between the JBoss JCA framework and the example resource adaptor that result when the EchoBean accesses the resource adaptor connection factory.</title>
+				<mediaobject>
+					<imageobject>
+						<imagedata align="center" fileref="images/javaee_chap7-8.jpg" />
+					</imageobject>
+				</mediaobject>
+			</figure>
+			<para>
+				The starting point is the client&#39;s invocation of the <literal>EchoBean.echo</literal> method. For the sake of conciseness of the diagram, the client is shown directly invoking the EchoBean.echo method when in reality the JBoss EJB container handles the invocation. There are three distinct interactions between the <literal>EchoBean</literal> and the resource adaptor; the lookup of the connection factory, the creation of a connection, and the close of the connection.
+			</para>
+			<para>
+				The lookup of the resource adaptor connection factory is illustrated by the 1.1 sequences of events. The events are:
+			</para>
+			<itemizedlist>
+				<listitem>
+					<para>
+						the echo method invokes the <literal>getConnection</literal> method on the resource adaptor connection factory obtained from the JNDI lookup on the <literal>java:comp/env/ra/DirContextFactory</literal> name which is a link to the <literal>java:/NoTransFS</literal> location.
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						the <literal>DirContextFactoryImpl</literal> class asks its associated <literal>ConnectionManager</literal> to allocate a connection. It passes in the <literal>ManagedConnectionFactory</literal> and <literal>FSRequestInfo</literal> that were associated with the <literal>DirContextFactoryImpl</literal> during its construction.
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						the <literal>ConnectionManager</literal> invokes its <literal>getManagedConnection</literal> method with the current <literal>Subject</literal> and <literal>FSRequestInfo</literal>.
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						the <literal>ConnectionManager</literal> asks its object pool for a connection object. The <literal>JBossManagedConnectionPool$BasePool</literal> is get the key for the connection and then asks the matching <literal>InternalPool</literal> for a connection.
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						Since no connections have been created the pool must create a new connection. This is done by requesting a new managed connection from the <literal>ManagedConnectionFactory</literal>. The <literal>Subject</literal> associated with the pool as well as the <literal>FSRequestInfo</literal> data are passed as arguments to the <literal>createManagedConnection</literal> method invocation.
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						the <literal>ConnectionFactory</literal> creates a new <literal>FSManagedConnection</literal> instance and passes in the <literal>Subject</literal> and <literal>FSRequestInfo</literal> data.
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						a <literal>javax.resource.spi.ConnectionListener</literal> instance is created. The type of listener created is based on the type of <literal>ConnectionManager</literal>. In this case it is an <literal>org.jboss.resource.connectionmgr.BaseConnectionManager2$NoTransactionListener</literal> instance.
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						the listener registers as a <literal>javax.resource.spi.ConnectionEventListener</literal> with the <literal>ManagedConnection</literal> instance created in 1.2.1.1.
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						the <literal>ManagedConnection</literal> is asked for the underlying resource manager connection. The <literal>Subject</literal> and <literal>FSRequestInfo</literal> data are passed as arguments to the <literal>getConnection</literal> method invocation.
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						The resulting connection object is cast to a <literal>javax.naming.directory.DirContext</literal> instance since this is the public interface defined by the resource adaptor.
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						After the <literal>EchoBean</literal> has obtained the <literal>DirContext</literal> for the resource adaptor, it simply closes the connection to indicate its interaction with the resource manager is complete.
+					</para>
+				</listitem>
+			</itemizedlist>
+			<para>
+				This concludes the resource adaptor example. Our investigation into the interaction between the JBoss JCA layer and a trivial resource adaptor should give you sufficient understanding of the steps required to configure any resource adaptor. The example adaptor can also serve as a starting point for the creation of your own custom resource adaptors if you need to integrate non-JDBC resources into the JBoss server environment.
+			</para>
+		</section>
+
+	</section>
+
+
+<section id="XARecoveryinJCA">
+  <title>XA Recovery in the JCA layer</title>
+
+  <para>Describes the design of how the JCA layer registers XA datasource for XA Resource Recovery with the JBoss TS project.</para>
+
+  <section id="JCA_XARecovery_DsXML">
+    <title>New -ds.xml file</title>
+      <para>We will create a jboss-ds_5_1.dtd (EAP 5.1) / jboss-ds_6_0.dtd (AS 6) which has the additional fields of</para>
+
+    <itemizedlist spacing="compact">
+      <listitem>
+     recover-user-name
+      </listitem>
+      <listitem>
+     recover-password
+      </listitem>
+      <listitem>
+     recover-security-domain
+      </listitem>
+      <listitem>
+     no-recover
+      </listitem>
+    </itemizedlist>
+
+      <para>The first two will represent a user and password pair which has the credentials to perform the recovery operation. The third likewise, but using a security domain instead. The last field is to exclude a datasource from recovery.</para>
+
+
+      <para>The fields should have a fall back value of their non-recover counterparts - e.g. user-name, password and security-domain.</para>
+
+  </section>
+
+  <section id="JCA_XARecovery_Min_Changes">
+    <title>Minimal changes</title>
+      <para>We should limit the main changes to</para>
+
+<code>org.jboss.resource.connectionmanager.ManagedConnectionFactoryDeployment</code>
+
+      <para>which controls the ManagedConnectionFactory for the resource adapter.</para>
+
+  </section>
+
+  <section id="JCA_XARecovery_Availability">
+    <title>Availability</title>
+
+    <itemizedlist spacing="compact">
+      <listitem>
+     JBoss Enterprise Application Platform 5.1 or higher
+      </listitem>
+      <listitem>
+     JBoss Application Server 6.0.0.M4 or higher
+      </listitem>
+    </itemizedlist>
+  </section>
+</section>
+</chapter>
+

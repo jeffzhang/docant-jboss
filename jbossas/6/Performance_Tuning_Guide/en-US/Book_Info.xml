@@ -1,0 +1,15 @@
+<?xml version='1.0'?>
+<!DOCTYPE bookinfo PUBLIC "-//OASIS//DTD DocBook XML V4.3//EN" "http://www.oasis-open.org/docbook/xml/4.3/docbookx.dtd" [
+]>
+
+<bookinfo id="Performance_Tuning_Guide">
+	<title>Performance Tuning Guide</title>
+	<subtitle>JBoss Application Server</subtitle>
+	<issuenum>5</issuenum>
+	<productnumber>0</productnumber>
+	<pubdate>Jul, 2008</pubdate>
+<subtitle>Authors</subtitle>
+	<xi:include href="Author_Group.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />	
+
+</bookinfo>
+

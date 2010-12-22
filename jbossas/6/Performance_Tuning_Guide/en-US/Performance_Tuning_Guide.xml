@@ -1,0 +1,566 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!-- This document was created with Syntext Serna Free. -->
+<!DOCTYPE book PUBLIC "-//OASIS//DTD DocBook XML V4.3//EN" "http://www.oasis-open.org/docbook/xml/4.3/docbookx.dtd" [
+   ]>
+<book>
+  <xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="Book_Info.xml"/>
+  <chapter id="performance_tuning">
+    <title>JBoss AS 6 Performance Tuning</title>
+    <section>
+      <title>Introduction</title>
+      <para>
+   Developing applications and deploying them to an application server does not guarantee best performance without performance tuning of the applications and server.
+   Performance tuning involves ensuring your application does not consume resources unnecessarily while ensures best performance of the applications and application server.
+  </para>
+      <para>
+   Application design, hardware/network profile, operating system, application software development, testing and deployment all play a major role in performance tuning. A bottleneck in performance therefore could be caused by these factors not just your application. Recent studies show that most performance problems are the result of the applications not the middleware or the operating systems. This could be associated with the technological developments in computer software, hardware and networking which has increased their reliability.
+  </para>
+      <para>
+   Improvement of application design and undertaking performance review of your applications before implementation is vital to avoiding bottlenecks after implementation. To undertake a performance review you need to setup a test environment undertake and analyse the test results. To effectively undertake a review, you also need to identify peak application workload times and the difference from normal workload periods. Peak workload times could be during the day, week, certain periods of the month, quarter or year. In understanding peaks workloads it is advisable not to go by averages as the peaks may be much more than the averages calculated over a period. The system requirements are bound by the peaks in the workload not the averages. On undertaking tuning it is recommended to carry out a few more tests and tuning of your system until a satisfactory performance is achieved.
+  </para>
+    </section>
+  </chapter>
+  <chapter>
+    <title>Hardware tuning</title>
+    <para>
+   To develop a suitable hardware configuration that suits the performance of your applications on the JBoss Application server, you need to understand the impact the selected hardware configuration may have on other applications and overall operating system performance.
+  </para>
+    <para>
+   To understand hardware performance tuning issues, it is also very critical to understand the hardware architecture of your system.
+  </para>
+    <section>
+      <title>CPU (Central Processing Unit)</title>
+      <para>
+    The CPU is the central processing unit of your computer which consists of:
+    <itemizedlist>
+          <listitem>
+            <para>
+       a control unit which receives and decides what type of instructions it has received,
+      </para>
+          </listitem>
+          <listitem>
+            <para>
+       CPU registers that store intermediate processing information temporarily,
+      </para>
+          </listitem>
+          <listitem>
+            <para>
+       a program counter which holds the location of the succeeding executable tasks,
+      </para>
+          </listitem>
+          <listitem>
+            <para>
+       instruction register that stores currently executing tasks,
+      </para>
+          </listitem>
+          <listitem>
+            <para>
+       CPU cache which is a limited memory that holds data currently being processed by the CPU.
+      </para>
+          </listitem>
+        </itemizedlist>
+    
+    Understanding your CPU architecture can be helpful in identifying your CPU specifications and how it works. For AMD CPU&apos;s please refer to <ulink url="http://www.amd.com/us-en/Processors/ProductInformation/0,,30_118,00.html">http://www.amd.com/us-en/Processors/ProductInformation/0,,30_118,00.html</ulink> for more information. For Intel CPU&apos;s please refer to <ulink url="http://www.intel.com/products/processor/index.htm?iid=subhdr+prod_proc">http://www.intel.com/products/processor/index.htm?iid=subhdr+prod_proc</ulink> for more information.
+   </para>
+    </section>
+    <section>
+      <title>RAM (Random Access Memory)</title>
+      <para>
+    Random access memory (RAM) is the next level of storage that can be used to hold executing programs and/or data. RAM chips provides a higher amount of storage than the CPU cache and can improve computer performance. Storing data or programs frequently used in RAM can highly improve performance as they can be retrieved faster than from the hard disk drives.
+   </para>
+      <para>
+    RAM is crucial for example when tuning your database management system to manage buffer cache. This would involve storing frequently used database information in RAM for quick application access while taking caution not to affect overall performance of other applications and operating system.
+   </para>
+    </section>
+    <section>
+      <title>Hard Disk</title>
+      <para>
+    Unlike the CPU and RAM, hard disk drives do not require a power source to retain information/data. In case of power loss, information stored in the CPU and RAM is lost while that stored in the hard disk is retained but may be corrupted depending on the type of operation that was in progress during the power loss.
+   </para>
+      <para>
+    However retrieval and storage of information from disk drives takes much longer as they use mechanical heads to read and write information to the cylinders of the disk. Storage areas in RAM and in the CPU can be accessed with equal speed while on the hard disk, movement of the disk head to the requested disk block/blocks where information is stored is necessary.
+   </para>
+      <para>
+    Practices such as disk defragmentation and cleanups can help improve file retrieval and overall performance of your applications.
+    It is therefore crucial to manage the disk storage carefully with the retrieval and processing of data in mind. You also need to identify a suitable file system for your operating system to ensure the best performance possible.
+   </para>
+      <para>
+    Understanding the main architectural differences and issues that may occur with different computer hardware profiles can help identify a suitable hardware performance and disaster management strategy that would be suitable for your needs.
+   </para>
+    </section>
+  </chapter>
+  <chapter>
+    <title>Operating System Performance Tuning</title>
+    <para>
+   Most modern operating systems now ship with performance tuning or profiling tools that can help you monitor CPU, memory, hard disk and network usage in realtime.
+  </para>
+    <para>
+   On Windows the task manager and performance monitor can be helpful in identifying system performance bottlenecks while in unix based operating systems <literal>top</literal> and <literal>ps</literal> are used for the same purpose. Linux distributions such as Red Hat Enterprise Linux and Fedora provide a graphical user interface <literal>System Monitor</literal> that is useful to monitor system performance.
+  </para>
+    <para>
+   Operating system performance tuning is about resource management to respond to individual requests. Managing operating system scalability on the other hand involves managing resource consumption with varying volumes (low to very high) of requests.
+  </para>
+    <para>
+   Overall operational performance metrics that are critical for the business such as response time to user requests, database, network, CPU and memory performance among other metrics should be identified and tested and logged in realtime where possible or with system rollouts
+  </para>
+    <para>
+   For clustered environments, understanding and monitoring your cluster&apos;s performance and identifying overloads early is critical to system failure prevention.
+  </para>
+    <section>
+      <title>Networking</title>
+      <para>
+    Network configurations may contribute to performance bottlenecks and may be hard to detect. For example a user may get an error on their browser when trying to load a web application on a dialup connection while the same page may load on a broadband internet connection. The main issue in this scenario may be bandwidth and may not be obviosly displayed in the error message displayed.
+   </para>
+      <para>
+    Identifying network architecture and infrastructure is therefore critical in performance tuning and fixing system bottlenecks.
+   </para>
+      <para>
+    Most modern operating systems provide you with network hardware configuration tools while some hardware manufacturers may also provide extended network hardware configuration tools with their drivers.
+   </para>
+      <para>
+    Most operating systems support different communication protocols which you can tweak. Factors such as TCP buffer memory space, connection buffer limits and acknowledgement options among others should be take into account in your network design.
+   </para>
+      <para>
+    Deciding to turn DNS lookups on or off in your web servers can also affect your performance but may be necessary to turn on for high security environments. Factoring this and allocating necessary resources or hardware can help improve system performance.
+   </para>
+    </section>
+  </chapter>
+  <chapter>
+    <title>Tuning the JVM</title>
+    <para>
+   For java based applications, it is recommended to also be familiar with tuning of your Java Virtual Machine (JVM). Some key aspects of your JVM that need tweaking include managing out of memory exceptions, java heap settings and garbage collection. Please refer to the JDK 5 documentation on <ulink url="http://java.sun.com/j2se/1.5.0/docs/">http://java.sun.com/j2se/1.5.0/docs/</ulink> for further discussions on this.
+  </para>
+    <para>
+    The HotSpot Java Virtual Machine ships with J2SE 1.4.2 and above and consists of various garbage collection tools which you can use to collect garbage collection information that you can use to tune your applications. You can find more information on the HotSpot Virtual machine on <ulink url="http://java.sun.com/docs/hotspot/gc1.4.2/">http://java.sun.com/docs/hotspot/gc1.4.2/</ulink>.
+   </para>
+    <para>
+    The <ulink url="http://java.sun.com/performance/jvmstat/">jvmstat toolkit</ulink> is recommended for the Hotspot JVM and can help give you a precise picture of your permanent memory space and the other segments on the heap. Please visit the link above for more information on the toolkit.
+    
+   </para>
+    <para>
+   ....more content needed...
+  </para>
+  </chapter>
+  <chapter>
+    <title>Tuning your applications</title>
+    <para>
+   Good application design and development practices are critical to ensuring satisfactory application performance. Data reads or writes and processing by your applications may cause performance bottlenecks due to factors such as timeouts on remote servers memory allocation or network issues among other factors. Understanding how each application works is therefore crucial in identifying performance bottlenecks. Setting expected time duration each code part is expected to take can help develop realistic benchmarks against which the applications can be reviewed. These benchmarks should take into account high and low peak usage times for the applications and not averages as these may highly vary from the peak times.
+  </para>
+    <para>
+   In addition, using benchmarking tools to test your applications may be a quick way to pinpoint issues in your code which can often be causes for performance bottlenecks. Iterative tests are recommended to identify cache and other hardware issues that may arise due to startup or other factors.
+  </para>
+    <para>
+   The JBoss Application Server web console <ulink url="http://localhost:8080/web-console/">http://localhost:8080/web-console/</ulink> provides you with monitoring tools starting with the JVM Hardware environment statistics on the default page and access to monitoring tools and snapshots.  
+  </para>
+    <note>
+      <title>Performance Monitor v/s Profiler</title>
+      <para>
+    A performance monitor informs you on overall application performance such as requests per second. 
+    Profiling tools such as <ulink url="http://www.jboss.org/jbossprofiler/">JBoss Profiler</ulink> will tell you how long it is taking your application to service a request, and how often it services certain types of requests. This can usually be broken down all the way to the individual methods. For example, how many times a method was called and the average/maximum/minimum amount of time spent in the method.
+   </para>
+    </note>
+    <para>
+   It is also important to take caution not to create bottlenecks for other applications while fixing a performance issue in one application.
+  </para>
+    <section>
+      <title>Instrumentation</title>
+      <para>
+    Applications should always be instrumented for performance analysis. In most cases, it is evident that performance requirements and peak workloads examined before production are  incorrect compared to during production. Without instrumentation of your applications, you will lack accurate tracking data. Workloads on your applications can also change over time, as the business size, models or environment changes.
+   </para>
+      <para>
+    Instrumentation in the past would have had to be embedded in the application. Today, there are many solutions for instrumentation that do not require developers to code. Commercial products, and the JBoss AOP framework can be used for just this purpose. You can also turn on call statistics in the containers, and Hibernate statistics. For more on this please refer to the AOP and Hibernate project pages.
+   </para>
+    </section>
+  </chapter>
+  <chapter>
+    <title>Tuning JBoss Application Server</title>
+    <para>
+   Before tuning the JBoss Application Server, please ensure that you are familiar with its components outlined in the introduction section of this book. You should also be familiar with any particular services your application may use on the application server and tune them to improve performance. It is also important to establish optimal database connections used by your applications and set these on the application server. This section discusses these among other JBoss Application Server performance tuning topics.
+  </para>
+    <section>
+      <title>Memory usage</title>
+      <para>
+    Memory usage of Java applications including the JBoss Application Server is dictated by the heap space allocated. You could therefore as an example, reduce 1GB heap space you currently have allocated to 800MB to save space.
+   </para>
+      <para>
+    There are several instances where the Java Virtual Machine (JVM) may report <literal>OutOfMemoryError</literal> even when it is not really out of its available memory. The JVM may report an out of memory error when it is really out of memory or when only a segment or generation of the heap space is exhausted as most modern JVM&apos;s divide the heap space into generations/segments. Another example could be inability of the operating system (occurs on Linux/Unix systems)to create new threads for the JVM.
+   </para>
+      <para>  
+    Running out of memory generates an Error that is not likely to be masked in a catch block because it is an Error rather than an Exception. This is important since one often sees theories expressed about OutOfMemoryError being reported erroneously. That is very unlikely, although OOMEs do occur when the heap has plenty of memory or plenty of recoverable memory. An OOME is also thrown when the permanent memory is exhausted and that is not part of the heap per se. That is a JVM specific area of memory where information on loaded classes is maintained. If you have a mountain of classes (e.g, a lot of EJBs and JSP pages) you can easily exhaust this area. Oftentimes an application will fail to deploy or fail to redeploy. Increase your permanent memory space as follows to avoid OOMEs. The default with the <literal>-server</literal> switch is 64 megabytes:
+    <screen>-XX:MaxPermSize?=128m</screen>
+   </para>
+      <para>
+    Note this is in addition to the heap. In this case we have 512M heap, 128M permanent space for a total of 640 megabytes. Don&apos;t forget the JVM itself takes up a chunk of system memory and there is also two megs per thread of stack space. That can add up with a lot of HTTP/S processors.
+   </para>
+      <para>
+    <literal>-XX:MaxPermSize?=128m -Xmx512m</literal> (total of 640 megabytes allocated from system - this is not the total size of the VM and does not include the space the VM allocates for the &quot;C heap&quot; or stack space)
+   </para>
+      <para> 
+    On Windows, you can set this in the <filename>&lt;JBOSS_HOME&gt;\bin\run.bat</filename> file by setting
+    <screen>JAVA_OPTS=%JAVA_OPTS% -Xms128m -Xmx512m -XX:MaxPermSize?=128m</screen>
+   </para>
+    </section>
+    <section>
+      <title>Database Connection</title>
+      <para>
+    Database performance tuning involves changing the initial database conceptual schema to improve performance. Irrespective of type, overall database management system performance tuning involves effective and efficient use of your hardware (Hard disk, CPU and RAM) and improving database read&apos;s and writes.
+   </para>
+      <para>
+    Resource limits set by your operating system may also set limits on your database management system. A database administrator can analyse a database and identify performance bottlenecks through taking the above factors into consideration and adjusting the necessary database management system parameters such as writing dirty buffers to disk, checkpoints and log file rotations. In some instances hardware upgrades may also be necessary to improve database performance.
+   </para>
+      <para>
+    Database connections can be costly to establish and manage. Applications that create new connections to the database with every transaction or query and then close that connection add a great deal of overhead. Having a very small connection pool will also throttle the applications as the JBoss application server by default queues the request for a default of 30,000 milliseconds (30 seconds) before cancellation and throwing an exception.
+   </para>
+      <para>
+    We recommend reliance on data source definitions you can setup in the deploy directory of the JBoss application server and utilizing the connection pool settings. Connection pooling in the JBoss application server allows you to easily monitor your connection usage from the JMX console to determine proper sizing. Your database management system may also shipped with tools that allow you to monitor connections.
+   </para>
+      <para>
+    Depending on the databases implemented, please ensure you create a data source file in the deploy directory of your configuration as shown below:
+    
+    <screen>&lt;JBoss_Home&gt;/server/&lt;your_configuration&gt;/deploy/</screen>
+    
+    The filename should be in the following formats:
+    
+    <screen>&lt;yourdatabasename&gt;-ds.xml</screen>
+   </para>
+      <note>
+        <title>Note</title>
+        <para>
+     Please note that the name of the file must end with <filename>-ds.xml</filename> in order for the JBoss application server to recognize it as a <emphasis>data source file</emphasis>. The Hypersonic database data source file for example is named <filename>hsqldb-ds.xml</filename>.
+    </para>
+      </note>
+      <para>
+    The example below is a sample Hypersonic database data source file. Please note that this file contains more comments or descriptions for the respective tags. For a full view of this file, and its comments, please refer to the <filename>hsqldb-ds.xml</filename> in the <filename>deploy</filename> directory of your configuration.
+   </para>
+      <note>
+        <title>More examples</title>
+        <para>More examples of datasource definition files for supported external databases can be found in the <literal>&lt;JBoss_Home&gt;/docs/examples/jca</literal> directory.</para>
+      </note>
+      <programlisting role="XML">...
+&lt;datasources&gt;
+ &lt;local-tx-datasource&gt;
+   
+ &lt;!-- The jndi name of the DataSource, it is prefixed with java:/ --&gt;
+ &lt;!-- Datasources are not available outside the virtual machine --&gt;
+ &lt;jndi-name&gt;DefaultDS&lt;/jndi-name&gt;
+  
+ &lt;!-- For server mode db, allowing other processes to use hsqldb over tcp.
+ This requires the org.jboss.jdbc.HypersonicDatabase mbean.
+ &lt;connection-url&gt;jdbc:hsqldb:hsql://${jboss.bind.address}:1701&lt;/connection-url&gt;
+ --&gt;
+ &lt;!-- For totally in-memory db, not saved when jboss stops. 
+ The org.jboss.jdbc.HypersonicDatabase mbean is required for proper db shutdown
+ &lt;connection-url&gt;jdbc:hsqldb:.&lt;/connection-url&gt;
+ --&gt;
+ &lt;!-- For in-process persistent db, saved when jboss stops.
+ The org.jboss.jdbc.HypersonicDatabase mbean is required for proper db shutdown
+ --&gt;
+ &lt;connection-url&gt;jdbc:hsqldb:${jboss.server.data.dir}${/}hypersonic${/}localDB&lt;/connection-url&gt;
+  
+ &lt;!-- The driver class --&gt;
+ &lt;driver-class&gt;org.hsqldb.jdbcDriver&lt;/driver-class&gt;
+  
+ &lt;!-- The login and password. Do not enter plain text for production databases. Please see Security section for more information --&gt;
+ &lt;user-name&gt;sa&lt;/user-name&gt;
+ &lt;password&gt;&lt;/password&gt;
+  
+ &lt;!--example of how to specify class that determines if exception means connection should be destroyed--&gt;
+ &lt;!--exception-sorter-class-name&gt;org.jboss.resource.adapter.jdbc.vendor.DummyExceptionSorter&lt;/exception-sorter-class-name--&gt;
+    
+ &lt;!-- this will be run before a managed connection is removed from the pool for use by a client--&gt;
+ &lt;!--&lt;check-valid-connection-sql&gt;select * from something&lt;/check-valid-connection-sql&gt; --&gt;
+  
+ &lt;!-- The minimum database connections managed in a pool/sub-pool. Pools are lazily constructed on first use --&gt;
+ &lt;min-pool-size&gt;5&lt;/min-pool-size&gt;
+   
+ &lt;!-- The maximum database connections managed in a pool/sub-pool --&gt;
+ &lt;max-pool-size&gt;20&lt;/max-pool-size&gt;
+  
+ &lt;!-- The time before an unused connection is destroyed --&gt;
+ &lt;!-- NOTE: This is the check period. It will be destroyed somewhere between 1x and 2x this timeout after last use --&gt;
+ &lt;!-- TEMPORARY FIX! - Disable idle connection removal, HSQLDB has a problem with not reaping threads on closed connections --&gt;
+ &lt;idle-timeout-minutes&gt;0&lt;/idle-timeout-minutes&gt;
+    
+ &lt;!-- sql to call when connection is created
+ &lt;new-connection-sql&gt;some arbitrary sql&lt;/new-connection-sql&gt;
+ --&gt;
+  
+ &lt;!-- sql to call on an existing pooled connection when it is obtained from pool 
+ &lt;check-valid-connection-sql&gt;some arbitrary sql&lt;/check-valid-connection-sql&gt;
+ --&gt;
+  
+ &lt;!-- example of how to specify a class that determines a connection is valid before it is handed out from the pool
+ &lt;valid-connection-checker-class-name&gt;org.jboss.resource.adapter.jdbc.vendor.DummyValidConnectionChecker&lt;/valid-connection-checker-class-name&gt;
+ --&gt;
+ 
+ &lt;!-- Whether to check all statements are closed when the connection is returned to the pool,
+ this is a debugging feature that should be turned off in production --&gt;
+ &lt;track-statements/&gt;
+    
+ &lt;!-- Use the getConnection(user, pw) for logins
+ &lt;application-managed-security/&gt;
+ --&gt;
+   
+ &lt;!-- Use the security domain defined in conf/login-config.xml --&gt;
+ &lt;security-domain&gt;HsqlDbRealm&lt;/security-domain&gt;
+  
+ &lt;!-- Use the security domain defined in conf/login-config.xml or the
+ getConnection(user, pw) for logins. The security domain takes precedence.
+ &lt;security-domain-and-application&gt;HsqlDbRealm&lt;/security-domain-and-application&gt;
+ --&gt;
+  
+ &lt;!-- HSQL DB benefits from prepared statement caching which stores recent prepared statements for future use. The prepared-statement-cache-size indicates the number of prepared statements to store in the cache. --&gt;
+ &lt;prepared-statement-cache-size&gt;32&lt;/prepared-statement-cache-size&gt;
+    
+ &lt;!-- corresponding type-mapping in the standardjbosscmp-jdbc.xml (optional) --&gt;
+ &lt;metadata&gt;
+ &lt;type-mapping&gt;Hypersonic SQL&lt;/type-mapping&gt;
+ &lt;/metadata&gt;
+   
+ &lt;!-- When using in-process (standalone) mode --&gt;
+ &lt;depends&gt;jboss:service=Hypersonic,database=localDB&lt;/depends&gt;
+ &lt;!-- Uncomment when using hsqldb in server mode
+ &lt;depends&gt;jboss:service=Hypersonic&lt;/depends&gt;
+ --&gt;
+ &lt;/local-tx-datasource&gt;
+  
+ &lt;!-- Uncomment if you want hsqldb accessed over tcp (server mode)
+ &lt;mbean code=&quot;org.jboss.jdbc.HypersonicDatabase&quot; 
+ name=&quot;jboss:service=Hypersonic&quot;&gt;
+ &lt;attribute name=&quot;Port&quot;&gt;1701&lt;/attribute&gt;
+ &lt;attribute name=&quot;BindAddress&quot;&gt;${jboss.bind.address}&lt;/attribute&gt;     
+ &lt;attribute name=&quot;Silent&quot;&gt;true&lt;/attribute&gt;
+ &lt;attribute name=&quot;Database&quot;&gt;default&lt;/attribute&gt;
+ &lt;attribute name=&quot;Trace&quot;&gt;false&lt;/attribute&gt;
+ &lt;attribute name=&quot;No_system_exit&quot;&gt;true&lt;/attribute&gt;
+ &lt;/mbean&gt;
+ --&gt;
+  
+ &lt;!-- For hsqldb accessed from jboss only, in-process (standalone) mode --&gt; 
+ &lt;mbean code=&quot;org.jboss.jdbc.HypersonicDatabase&quot; 
+ name=&quot;jboss:service=Hypersonic,database=localDB&quot;&gt;
+ &lt;attribute name=&quot;Database&quot;&gt;localDB&lt;/attribute&gt;
+ &lt;attribute name=&quot;InProcessMode&quot;&gt;true&lt;/attribute&gt;
+ &lt;/mbean&gt;
+ 
+ &lt;/datasources&gt;
+</programlisting>
+    </section>
+    <section id="Clustering_Tuning">
+      <title>Clustering Tuning</title>
+      <para>If you are running your application in a cluster, particularly if if it involves high volume state replication around the cluster, there are a number of possible performance optimizations. 
+      As with any performance optimizations, always load test your application before and after making changes to verify the change has the intended effect, and make one change at a time so it&apos;s
+      clear what change has what effect.</para>
+      <section>
+        <title>Ensuring Adequate Network Buffers</title>
+        <para>The standard clustered services in JBoss AS use UDP for intra-cluster communication, in order to take advantage of UDP-based IP multicast. 
+         A downside to the use of UDP is some of the lossless transmission guarantees that are provided at the OS network level with TCP instead need to be implemented in Java code.
+         In order to achieve peak performance it is important to reduce the frequency of UDP packets being dropped in the network layers. A frequent cause of lost
+         packets is inadequately sized network buffers on the machines that are hosting the cluster nodes. The Enterprise Application Platform clustering code will <emphasis>request</emphasis>
+         adequately sized read and write buffers from the OS when it opens sockets, but most operating systems (Windows seems to be an exception) will only <emphasis>provide</emphasis> buffers
+         up to a maximum size. This maximum read and write buffer sizes are configurable at the OS level, and the default values are too low to allow peak performance. So, a simple tuning step
+         is to configure your OS to allow buffers up to the size JBoss AS clustering code will request.</para>
+        <para>The specific configuration steps needed to increase the maximum allowed buffer sizes are OS specific. See your OS documentation for instructions
+         on how to increase these. For Linux systems, maximum values for these buffers sizes that will survive machine restarts can be set by editing
+         the <literal>/etc/sysctl.conf</literal> file:</para>
+        <programlisting><![CDATA[# Allow a 25MB UDP receive buffer for JGroups
+net.core.rmem_max = 26214400
+# Allow a 1MB UDP send buffer for JGroups
+net.core.wmem_max = 1048576]]></programlisting>
+      </section>
+      <section>
+        <title>Isolating Intra-Cluster Traffic</title>
+        <para>If network resources are a bottleneck for your application, overall performance can be improved by isolating intra-cluster traffic from external request traffic.
+         This requires multiple NICs on your server machines, with request traffic coming in on one NIC and intra-cluster traffic using another. Once you
+         have the hardware set up, it is easy to tell JBoss AS nodes to use a different interface for the intra-cluster traffic:</para>
+        <screen>./run.sh -c all -b 10.0.0.104 -Djgroups.bind_addr=192.168.100.104</screen>
+        <para>In the above example, the <literal>-Djgroups.bind_addr</literal> setting tells the JBoss AS to run intra-cluster JGroups traffic
+         over the 192.168.100.104 interface, with <literal>-b</literal> specifying that all other traffic should use 10.0.0.104.</para>
+      </section>
+      <section>
+        <title>JGroups Message Bundling</title>
+        <para>The JGroups group communication library used by JBoss AS provides a feature known as &quot;message bundling&quot;. Message
+         bundling is similar to nagling on a TCP socket -- small messages are queued before sending (for up to a configurable maximum time) until a configurable number
+         of bytes have accumulated, and then the queued messages are bundled and sent as one large message. Use of bundling can have significant performance benefits
+         for high-volume asynchronous session replication. However, it is not enabled by default, as bundling can add significant latency to other types of intra-cluster
+         traffic, particularly clustered Hibernate/JPA Second Level Cache traffic.</para>
+        <para>If your application uses high volume session replication (web sessions or EJB3 stateful session beans), you might be able to increase performance by configuring
+         the distributed caching layer to use a JGroups channel configured with message bundling enabled. This is done by editing the 
+         <literal>&lt;JBoss_Home&gt;/server/&lt;your_configuration&gt;/deploy/cluster/jboss-cache-manager.sar/META-INF/jboss-cache-jboss-beans.xml</literal> file. For example, for the cache used by default for
+         web sessions:</para>
+        <programlisting><![CDATA[. . .
+      
+<!-- Standard cache used for web sessions -->
+<entry><key>standard-session-cache</key>
+<value>      
+   <bean name="StandardSessionCacheConfig" class="org.jboss.cache.config.Configuration">
+      
+      . . . 
+      
+      <!-- Replace standard 'udp' JGroups stack with 
+           one that uses message bundling -->
+      <property name="multiplexerStack">udp-async</property>
+      
+      . . .]]></programlisting>
+        <para>For FIELD granularity web sessions, in the same file the same change can be made to the cache configuration with the <literal>field-granularity-session-cache</literal> key.
+      For EJB3 stateful session beans, in the same file the same change can be made to the cache configuration with the <literal>sfsb-cache</literal> key.</para>
+        <note>
+          <para>Using the <literal>udp-async</literal> JGroups protocol stack for the session caches means an additional JGroups transport protocol will be used.
+        This means additional sockets will be opened compared to a standard Enterprise Application Platform installation.</para>
+        </note>
+      </section>
+      <section>
+        <title>Enabling Buddy Replication for Session Caches</title>
+        <para>If your application involves high volume replication of web sessions or EJB3 stateful session beans in a cluster
+         of more than two nodes, you can improve performance by enabling &quot;buddy replication&quot; in the web session and stateful 
+         session bean caches. With buddy replication, instead of replicating a copy of sessions to all nodes in the cluster,
+         a copy is only replicated to a configurable number of &quot;buddy&quot; nodes.
+         </para>
+        <para>Buddy replication is enabled done by editing the 
+         <literal>&lt;JBoss_Home&gt;/server/&lt;your_configuration&gt;/deploy/cluster/jboss-cache-manager.sar/META-INF/jboss-cache-jboss-beans.xml</literal> file. For example, for the cache used by default for
+         web sessions:</para>
+        <programlisting><![CDATA[. . .
+      
+<!-- Standard cache used for web sessions -->
+<entry><key>standard-session-cache</key>
+<value>      
+   <bean name="StandardSessionCacheConfig" class="org.jboss.cache.config.Configuration">
+      
+      . . . 
+      
+      <property name="buddyReplicationConfig">
+         <bean class="org.jboss.cache.config.BuddyReplicationConfig">
+               
+            <!--  Just set to true to turn on buddy replication -->
+            <property name="enabled">true</property>
+      
+      . . .]]></programlisting>
+        <para>For FIELD granularity web sessions, in the same file the same change can be made to the cache configuration with the <literal>field-granularity-session-cache</literal> key.
+      For EJB3 stateful session beans, in the same file the same change can be made to the cache configuration with the <literal>sfsb-cache</literal> key.</para>
+      </section>
+      <section>
+        <title>Reducing the Volume of Web Session Replication</title>
+        <para>If your application is configured for web session replication, reducing the amount data being replicated can obviously improve performance.
+         This can be accomplished both by avoiding replication when a request hasn&apos;t actually updated the session
+         and by limiting replication to only the session data that has actually changed. See
+         the discussion of <emphasis role="bold">replication-trigger</emphasis> and
+         <emphasis role="bold">replication-granularity</emphasis> in <xref linkend="clustering-http-state"/> for
+         how to configure your application to limit the amount of data replicated.</para>
+      </section>
+      <section>
+        <title>Reducing the Volume of EJB3 Stateful Session Bean Replication</title>
+        <para>If your application is configured for EJB3 Stateful Session Bean replication, avoiding replication after bean requests that haven&apos;t modified
+         state can improve performance. This can be controlled by having your bean class implement the
+         <literal>org.jboss.ejb3.cache.Optimized</literal> interface. See <xref linkend="clustering-session-sfsb30"/>
+         for details.</para>
+      </section>
+      <section>
+        <title>Be Cautious with JPA/Hibernate Second Level Caching</title>
+        <para>JPA and Hibernate applications can often gain a performance boost by caching database data in the application server.
+         However, with a clustered application the decision of whether or not to cache data is more complex than in the non-clustered case.
+         This is because in a cluster, when database writes occur on one node, the caching layer needs to send a message to all
+         other nodes in the cluster telling them to update or invalidate their cache content. For types of data that
+         are frequently updated, the cost of the intra-cluster messages can outweigh the benefits of caching.</para>
+        <para>So, be sure to carefully load test your clustered application when deciding whether to store items
+         in the Hibernate Second Level Cache. Avoid the temptation to turn on caching for all entity types; instead
+         rank your entity types based on how infrequent writes of each type are and how likely it is that more
+         than one transaction will read a particular entity. Then enable caching for one type at a time,
+         testing for the performance impact.</para>
+        <para>Be doubly cautious about enabling caching of query result sets. When query caching is enabled, any
+         time there is a database write, the clustered cache needs to send <emphasis>two</emphasis> messages around
+         the cluster.  These messages are used to ensure that any query results that may have been affected
+         by the write are invalidated out of the cache.  These messages need to be sent whether
+         or not the entity type that has been written is itself cached. The cost of these messages can
+         easily offset the benefit of query result caching. So, again, be sure to test the effect of caching.</para>
+      </section>
+      <section>
+        <title>Monitoring JGroups via JMX</title>
+        <para>When the JBoss AS clustering services create a JGroups <literal>Channel</literal>
+         to use for intra-cluster communication, they also register with the JMX server a number of MBeans related to 
+         that channel; one for the channel itself and one for each of its constituent protocols. For users
+         interested in monitoring the performance-related behavior of a channel, a number of MBean attributes
+         may prove useful.</para>
+        <variablelist>
+          <varlistentry>
+            <term>
+              <emphasis role="bold">jboss.jgroups:cluster=&lt;cluster_name&gt;,protocol=UDP,type=protocol</emphasis>
+            </term>
+            <listitem>
+              <para>Provides statistical information on the sending and receipt of messages over the network,
+               along with statistics on the behavior of the two thread pools used to carry incoming messages
+               up the channel&apos;s protocol stack.</para>
+              <para>Useful attributes directly related to the rate of transmission and receipt include
+               <literal>MessagesSent</literal>, <literal>BytesSent</literal>, <literal>MessagesReceived</literal> and 
+               <literal>BytesReceived</literal>.</para>
+              <para>Useful attributes related to the behavior of the thread pool used to carry ordinary
+               incoming messages up the protocol stack include
+               <literal>IncomingPoolSize</literal> and <literal>IncomingQueueSize</literal>. Equivalent
+               attributes for the pool of threads used to carry special, unordered &quot;out-of-band&quot; messages
+               up the protocol stack include <literal>OOBPoolSize</literal> and <literal>OOBQueueSize</literal>.
+               Note that <literal>OOBQueueSize</literal> will typically be <literal>0</literal> as the standard
+               JGroups configurations do not use a queue for OOB messages.</para>
+            </listitem>
+          </varlistentry>
+          <varlistentry>
+            <term>
+              <emphasis role="bold">jboss.jgroups:cluster=&lt;cluster_name&gt;,protocol=UNICAST,type=protocol</emphasis>
+            </term>
+            <listitem>
+              <para>Provides statistical information on the behavior of the protocol responsible for
+               ensuring lossless, ordered delivery of unicast (i.e. point-to-point) messages.</para>
+              <para>The ratio of <literal>NumRetransmissions</literal> to <literal>MessagesSent</literal>
+               can be tracked to see how frequently messages are not being received by peers and need to be retransmitted.
+               The <literal>NumberOfMessagesInReceiveWindows</literal> attribute can be monitored to track
+               how many messages are queueing up on a receipient node waiting for a message with an earlier
+               sequence number to be received. A high number indicates messages are being dropped and 
+               need to be retransmitted.</para>
+            </listitem>
+          </varlistentry>
+          <varlistentry>
+            <term>
+              <emphasis role="bold">jboss.jgroups:cluster=&lt;cluster_name&gt;,protocol=NAKACK,type=protocol</emphasis>
+            </term>
+            <listitem>
+              <para>Provides statistical information on the behavior of the protocol responsible for
+               ensuring lossless, ordered delivery of multicast (i.e. point-to-multipoint) messages.</para>
+              <para>Use the <literal>XmitRequestsReceived</literal> attribute to track how often a node is being
+               asked to retransmit a messages it sent; use <literal>XmitRequestsSent</literal> to track how
+               often a node is needing to request retransmission of a message.</para>
+            </listitem>
+          </varlistentry>
+          <varlistentry>
+            <term>
+              <emphasis role="bold">jboss.jgroups:cluster=&lt;cluster_name&gt;,protocol=FC,type=protocol</emphasis>
+            </term>
+            <listitem>
+              <para>Provides statistical information on the behavior of the protocol responsible for
+               ensuring fast message senders do not overwhelm slow receivers.</para>
+              <para>Attributes useful for monitoring whether threads seeking to send messages are having to
+               block while waiting for credits from receivers include <literal>Blockings</literal>, 
+               <literal>AverageTimeBlocked</literal> and <literal>TotalTimeBlocked</literal>.</para>
+            </listitem>
+          </varlistentry>
+        </variablelist>
+      </section>
+    </section>
+    <section>
+      <title>Other key configurations</title>
+      <para>
+    Other key configurations required for performance tuning of your application server include the <filename>&lt;JBoss_Home&gt;/server/&lt;your_configuration&gt;/deployers/jbossweb.deployer/server.xml</filename> file that sets your HTTP requests pool.
+   </para>
+      <para>
+    JBoss AS 5 has a robust thread pooling, that should be sized appropriately.
+    The server has a <filename>jboss-service.xml</filename> file in the <filename>&lt;JBoss_Home&gt;/server/&lt;your_configuration&gt;/conf</filename>  directory that defines the system thread pool.
+    There is a setting that defines the behavior if there isn&apos;t a thread available in the pool for execution. The default is to allow the calling thread to execute the task. You can monitor the queue depth of the system thread pool through the JMX Console, and determine from that if you need to make the pool larger.
+   </para>
+      <para>
+    The <literal>default</literal> configuration is appropriate for development, but not necessarily for a production environment. In the default configuration, console logging is enabled. Console logging is ideal for development, especially within the IDE, as you get all the log messages to show in the IDE console view.
+    In a production environment, console logging is very expensive and is not recommended.
+    Turn down the verbosity level of logging if its not necessary. Please note that the less you log, the less I/O will be generated, and the better the overall throughput will be.
+   </para>
+      <para>
+    Other performance tuning aspects include Caching, Clustering and Replication which are discussed in the respective Chapters in this book.
+   </para>
+    </section>
+  </chapter>
+</book>

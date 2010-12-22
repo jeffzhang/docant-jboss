@@ -1,0 +1,17 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE bookinfo PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [ ]>
+
+<bookinfo>
+<title>JBoss AS 6.0 JCA Guide</title>
+	<subtitle>JCA with JBoss Application Server 6</subtitle>
+	<productname>JBoss Application Server</productname>
+	<productnumber>6.0</productnumber>
+	<pubdate>Oct 2010</pubdate>
+	<abstract>
+		<para>
+			This book is the JBoss Application Server 6 JCA Guide.
+		</para>
+	</abstract>
+	<!-- <subtitle>Authors</subtitle>-->
+	<xi:include href="Author_Group.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+</bookinfo>

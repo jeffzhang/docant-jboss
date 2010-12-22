@@ -1,0 +1,1388 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd">
+
+   <chapter id="Login_Modules">
+      <title>JBoss Login Modules</title>
+      
+      <section id="JBoss_Login_Modules">
+         <title>Using Modules</title>
+         <para>
+            JBoss AS includes several bundled login modules suitable for most user management needs. JBoss AS can read user information from a relational database, a LDAP server or flat files. In addition to            these core login modules, JBoss provides several other login modules that provide user information for very customized needs in JBoss. Before we explore the individual login modules, let&apos;s              take a look at a few login module configuration options that are common to multiple modules.
+         </para>
+
+         <section id="sect-Password_Stacking">
+            <title>Password Stacking</title>
+            <para>
+               Multiple login modules can be chained together in a stack, with each login module providing both the authentication and authorization components. This works for many use cases, but sometimes                 authentication and authorization are split across multiple user management stores.
+            </para>
+
+            <para>
+               <xref linkend="sect-LdapLoginModule"/>describes how to combine LDAP and a relational database, allowing a user to be authenticated by either system. However, consider the case where users are                managed in a central LDAP server but application-specific roles are stored in the application&apos;s relational database. The password-stacking module option captures this relationship.
+            </para>
+
+            <para>
+               To use password stacking, each login module should set the <markup>&lt;module-option&gt;</markup>  <literal>password-stacking</literal> attribute to <literal>useFirstPass</literal>. If a                     previous module configured for password stacking has authenticated the user, all the other stacking modules will consider the user authenticated and only attempt to provide a set of roles for                the authorization step.
+            </para>
+
+            <para>
+               When <literal>password-stacking</literal> option is set to <literal>useFirstPass</literal>, this module first looks for a shared username and password under the property names                                <property>javax.security.auth.login.name</property> and <property>javax.security.auth.login.password</property> respectively in the login module shared state map.
+            </para>
+
+            <para>
+               If found, these properties are used as the principal name and password. If not found, the principal name and password are set by this login module and stored under the property names                         <property>javax.security.auth.login.name</property> and <property>javax.security.auth.login.password</property> respectively.
+            </para>
+
+            <note>
+               <para>
+                  When using password stacking, set all modules to be required. This ensures that all modules are considered, and have the chance to contribute roles to the authorization process.
+               </para>
+            </note>
+
+            <example id="exam-Password_Stacking_Example">
+               <title>Password Stacking Sample</title>
+               <para>
+                  This example shows how password stacking could be used.
+               </para>
+
+               <programlisting language="XML" role="XML">&lt;application-policy name=&quot;todo&quot;&gt;
+    &lt;authentication&gt;
+        &lt;login-module code=&quot;org.jboss.security.auth.spi.LdapLoginModule&quot; 
+                      flag=&quot;required&quot;&gt;
+            &lt;!-- LDAP configuration --&gt;
+            &lt;module-option name=&quot;password-stacking&quot;&gt;useFirstPass&lt;/module-option&gt;
+        &lt;/login-module&gt;
+        &lt;login-module code=&quot;org.jboss.security.auth.spi.DatabaseServerLoginModule&quot; 
+                      flag=&quot;required&quot;&gt;
+            &lt;!-- database configuration --&gt;                
+            &lt;module-option name=&quot;password-stacking&quot;&gt;useFirstPass&lt;/module-option&gt;
+        &lt;/login-module&gt;
+    &lt;/authentication&gt;
+&lt;/application-policy&gt;
+               </programlisting>
+            </example>
+         </section>
+
+         <section id="Using_JBoss_Login_Modules-Password_Hashing">
+            <title>Password Hashing</title>
+            <para>
+               Most login modules must compare a client-supplied password to a password stored in a user management system. These modules generally work with plain text passwords, but can be configured to                  support hashed passwords to prevent plain text passwords from being stored on the server side.
+            </para>
+
+            <example>
+               <title>Password Hashing</title>
+               <para>
+                  The following is a login module configuration that assigns unauthenticated users the principal name <literal>nobody</literal> and contains based64-encoded, MD5 hashes of the passwords in a                   <filename>usersb64.properties</filename> file. The <filename>usersb64.properties</filename> file can be part of the deployment classpath, or be saved in the <filename>/conf</filename>                        directory.
+               </para>
+
+               <programlisting language="XML" role="XML">&lt;policy&gt; 
+    &lt;application-policy name=&quot;testUsersRoles&quot;&gt; 
+        &lt;authentication&gt; 
+            &lt;login-module code=&quot;org.jboss.security.auth.spi.UsersRolesLoginModule&quot; 
+                          flag=&quot;required&quot;&gt; 
+                &lt;module-option name=&quot;usersProperties&quot;&gt;usersb64.properties&lt;/module-option&gt; 
+                &lt;module-option name=&quot;rolesProperties&quot;&gt;test-users-roles.properties&lt;/module-option&gt; 
+                &lt;module-option name=&quot;unauthenticatedIdentity&quot;&gt;nobody&lt;/module-option&gt; 
+                &lt;module-option name=&quot;hashAlgorithm&quot;&gt;MD5&lt;/module-option&gt; 
+                &lt;module-option name=&quot;hashEncoding&quot;&gt;base64&lt;/module-option&gt; 
+            &lt;/login-module&gt; 
+        &lt;/authentication&gt; 
+    &lt;/application-policy&gt; 
+&lt;/policy&gt;
+               </programlisting>
+            </example>
+
+            <variablelist>
+               <varlistentry>
+                  <term>hashAlgorithm</term>
+                  <listitem>
+                     <para>
+                        Name of the <literal>java.security.MessageDigest</literal> algorithm to use to hash the password. There is no default so this option must be specified to enable hashing. Typical                              values are <literal>MD5</literal> and <literal>SHA</literal>.
+                     </para>
+                  </listitem>
+               </varlistentry>
+               <varlistentry>
+                  <term>hashEncoding</term>
+                  <listitem>
+                     <para>
+                        String that specifies one of three encoding types:  <literal>base64</literal>, <literal>hex</literal> or <literal>rfc2617</literal>. The default is <literal>base64</literal>.
+                     </para>
+                  </listitem>
+               </varlistentry>
+               <varlistentry>
+                  <term>hashCharset</term>
+                  <listitem>
+                     <para>
+                        Encoding character set used to convert the clear text password to a byte array. The platform default encoding is the default.
+                     </para>
+                  </listitem>
+               </varlistentry>
+               <varlistentry>
+                  <term>hashUserPassword</term>
+                  <listitem>
+                     <para>
+                        Specifies the hashing algorithm must be applied to the password the user submits. The hashed user password is compared against the value in the login module, which is expected to be a                        hash of the password. The default is <literal>true</literal>.
+                     </para>
+                  </listitem>
+               </varlistentry>
+               <varlistentry>
+                  <term>hashStorePassword</term>
+                  <listitem>
+                     <para>
+                        Specifies the hashing algorithm must be applied to the password stored on the server side. This is used for digest authentication, where the user submits a hash of the user password                          along with a request-specific tokens from the server to be compare. The hash algorithm (for digest, this would be <literal>rfc2617</literal>) is utilized to compute a server-side                             hash, which should match the hashed value sent from the client.
+                     </para>
+                  </listitem>
+               </varlistentry>
+            </variablelist>
+
+            <para>
+               If you must generate passwords in code, <classname>the org.jboss.security.Util</classname> class provides a static helper method that will hash a password using the specified encoding.
+            </para>
+
+            <programlisting>String hashedPassword = Util.createPasswordHash(&quot;MD5&quot;,
+                                                Util.BASE64_ENCODING,
+                                                null,
+                                                null,
+                                                &quot;password&quot;);   
+            </programlisting>
+
+            <para>
+               OpenSSL provides an alternative way to quickly generate hashed passwords.
+            </para>
+
+            <programlisting>echo -n password | openssl dgst -md5 -binary | openssl base64
+            </programlisting>
+
+            <para>
+               In both cases, the text password should hash to <literal>X03MO1qnZdYdgyfeuILPmQ==</literal>. This value  must be stored in the user store.
+            </para>
+         </section>
+
+         <section id="Using_JBoss_Login_Modules-Unauthenticated_Identity">
+            <title>Unauthenticated Identity</title>
+            <para>
+               Not all requests are received in an authenticated format. <literal>unauthenticated identity</literal> is a login module configuration option that assigns a specific identity (guest, for                      example) to requests that are made with no associated authentication information. This can be used to allow unprotected servlets to invoke methods on EJBs that do not require a specific role.                Such a principal has no associated roles and so can only access either unsecured EJBs or EJB methods that are associated with the unchecked permission constraint.
+            </para>
+
+            <itemizedlist>
+               <listitem>
+                  <para>
+                     <emphasis role="bold">unauthenticatedIdentity</emphasis>: This defines the principal name that should be assigned to requests that contain no authentication information.
+                  </para>
+               </listitem>
+            </itemizedlist>
+         </section>
+
+         <section id="Using_JBoss_Login_Modules-PrincipalClass">
+            <title>Principal Class</title>
+            <para>
+               Sometimes the implementation of the <literal>Principal</literal> interface provided by JBoss is not enough for the applications needs. In this case customers can use a custom implementation.
+            </para>
+
+            <itemizedlist>
+               <listitem>
+                  <para>
+                     <emphasis role="bold">principalClass</emphasis>: An option that specifies a <literal>Principal</literal> implementation class. This must support a constructor taking a string argument                        for the principal name.
+                  </para>
+               </listitem>
+            </itemizedlist>
+         </section>
+
+         <section id="sect-UsersRolesLoginModule">
+            <title>UsersRolesLoginModule</title>
+            <para>
+               <literal>UsersRolesLoginModule</literal> is a simple login module that supports multiple users and user roles loaded from Java properties files. The username-to-password mapping file is called               <filename>users.properties</filename> and the username-to-roles mapping file is called <filename>roles.properties</filename>.
+            </para>
+
+            <para>
+               The supported login module configuration options include the following:
+            </para>
+
+            <variablelist>
+               <varlistentry>
+               <term>usersProperties</term>
+                  <listitem>
+                     <para>
+                        Name of the properties resource (file) containing the username to password mappings. This defaults to <filename>&lt;filename_prefix&gt;-users.properties</filename>.
+                     </para>
+                  </listitem>
+               </varlistentry>
+               <varlistentry>
+                  <term>rolesProperties</term>
+                  <listitem>
+                     <para>
+                        Name of the properties resource (file) containing the username to roles mappings. This defaults to <filename>&lt;filename_prefix&gt;-roles.properties</filename>.
+                     </para>
+                  </listitem>
+               </varlistentry>
+            </variablelist>
+
+            <para>
+               This login module supports password stacking, password hashing, and unauthenticated identity.
+            </para>
+
+            <para>
+               The properties files are loaded during initialization using the initialize method thread context class loader. This means that these files can be placed into the Java EE deployment JAR, the                  JBoss configuration directory, or any directory on the JBoss server or system classpath. The primary purpose of this login module is to easily test the security settings of multiple users and                roles using properties files deployed with the application.
+            </para>
+
+            <example id="exam-UsersRoleLoginModule">
+               <title>UserRolesLoginModule</title>
+               <programlisting language="XML">&lt;deployment xmlns=&quot;urn:jboss:bean-deployer:2.0&quot;&gt; 
+
+   &lt;!-- ejb3 test application-policy definition --&gt; 
+   &lt;application-policy xmlns=&quot;urn:jboss:security-beans:1.0&quot; name=&quot;ejb3-sampleapp&quot;&gt; 
+      &lt;authentication&gt; 
+         &lt;login-module code=&quot;org.jboss.security.auth.spi.UsersRolesLoginModule&quot; flag=&quot;required&quot;&gt; 
+            &lt;module-option name=&quot;usersProperties&quot;&gt;ejb3-sampleapp-users.properties&lt;/module-option&gt; 
+            &lt;module-option name=&quot;rolesProperties&quot;&gt;ejb3-sampleapp-roles.properties&lt;/module-option&gt; 
+         &lt;/login-module&gt; 
+      &lt;/authentication&gt; 
+   &lt;/application-policy&gt; 
+
+&lt;/deployment&gt;
+               </programlisting>
+            </example>
+
+            <para>
+               In <xref linkend="exam-UsersRoleLoginModule"/>, the <filename>ejb3-sampleapp-users.properties</filename> file uses a <filename>username=password</filename> format with each user entry on a                   separate line:
+            </para>
+
+            <programlisting>username1=password1
+username2=password2
+...
+            </programlisting>
+
+            <para>
+               The <filename>ejb3-sampleapp-roles.properties</filename> file referenced in <xref linkend="exam-UsersRoleLoginModule"/> uses the pattern <literal>username=role1,role2,</literal> with an                      optional group name value. For example:
+            </para>
+
+            <programlisting>username1=role1,role2,...
+username1.RoleGroup1=role3,role4,...
+username2=role1,role3,...
+            </programlisting>
+
+            <para>
+               The <property>username.XXX</property> property name pattern present in <filename>ejb3-sampleapp-roles.properties</filename> is used to assign the username roles to a particular named group of                roles where the <literal>XXX</literal> portion of the property name is the group name. The <property>username=...</property> form is an abbreviation for                                                       <property>username.Roles=...</property>, where the <literal>Roles</literal> group name is the standard name the <literal>JaasSecurityManager</literal> expects to contain the roles which                      define the users permissions.
+            </para>
+
+            <para>
+               The following would be equivalent definitions for the <literal>jduke</literal> username:
+            </para>
+
+            <programlisting>jduke=TheDuke,AnimatedCharacter
+jduke.Roles=TheDuke,AnimatedCharacter
+            </programlisting>
+         </section>
+
+         <section id="sect-DatabaseServerLoginModule">
+            <title>DatabaseServerLoginModule</title>
+            <para>
+               The <literal>DatabaseServerLoginModule</literal> is a Java Database Connectivity-based (JDBC) login module that supports authentication and role mapping. Use this login module if you have your               username, password and role information stored in a relational database.
+            </para>
+
+            <note>
+               <para>
+                  This module supports password stacking, password hashing and unauthenticated identity.
+               </para>
+            </note>
+
+            <para>
+               The <literal>DatabaseServerLoginModule</literal> is based on two logical tables:
+            </para>
+
+            <programlisting>Table Principals(PrincipalID text, Password text)
+Table Roles(PrincipalID text, Role text, RoleGroup text)
+            </programlisting>
+
+            <para>
+               The <literal>Principals</literal> table associates the user <literal>PrincipalID</literal> with the valid password and the <literal>Roles</literal> table associates the user                                  <literal>PrincipalID</literal> with its role sets. The roles used for user permissions must be contained in rows with a <literal>RoleGroup</literal> column value of <literal>Roles</literal>.
+            </para>
+
+            <para>
+               The tables are logical in that you can specify the SQL query that the login module uses. The only requirement is that the <literal>java.sql.ResultSet</literal> has the same logical structure                 as the <literal>Principals</literal> and <literal>Roles</literal> tables described previously. The actual names of the tables and columns are not relevant as the results are accessed based on                the column index.
+            </para>
+
+            <para>
+               To clarify this notion, consider a database with two tables, <literal>Principals</literal> and <literal>Roles</literal>, as already declared. The following statements populate the tables with                the following data:
+            </para>
+
+            <itemizedlist>
+               <listitem>
+                  <para>
+                     <literal>PrincipalID</literal><literal>java</literal> with a <literal>Password</literal> of <literal>echoman</literal> in the <literal>Principals</literal> table
+                  </para>
+               </listitem>
+               <listitem>
+                  <para>
+                     <literal>PrincipalID</literal><literal>java</literal> with a role named <literal>Echo</literal> in the <literal>Roles</literal><literal>RoleGroup</literal> in the                                             <literal>Roles</literal> table
+                  </para>
+               </listitem>
+               <listitem>
+                  <para>
+                     <literal>PrincipalID</literal><literal>java</literal> with a role named <literal>caller_java</literal> in the <literal>CallerPrincipal</literal><literal>RoleGroup</literal> in the                            <literal>Roles</literal> table
+                  </para>
+               </listitem>
+            </itemizedlist>
+
+            <programlisting>INSERT INTO Principals VALUES(&apos;java&apos;, &apos;echoman&apos;)
+INSERT INTO Roles VALUES(&apos;java&apos;, &apos;Echo&apos;, &apos;Roles&apos;)
+INSERT INTO Roles VALUES(&apos;java&apos;, &apos;caller_java&apos;, &apos;CallerPrincipal&apos;)
+            </programlisting>
+
+            <para>
+               The supported login module configuration options include the following:
+            </para>
+
+            <variablelist>
+               <varlistentry>
+                  <term>dsJndiName</term>
+                  <listitem>
+                     <para>
+                        The JNDI name for the <literal>DataSource</literal> of the database containing the logical <literal>Principals</literal> and <literal>Roles</literal> tables. If not specified this                            defaults to <literal>java:/DefaultDS</literal>.
+                     </para>
+                  </listitem>
+               </varlistentry>
+               <varlistentry>
+                  <term>principalsQuery</term>
+                  <listitem>
+                     <para>
+                        The prepared statement query equivalent to: <literal>select Password from Principals where PrincipalID=?</literal>. If not specified this is the exact prepared statement that will be                         used.
+                     </para>
+                  </listitem>
+               </varlistentry>
+               <varlistentry>
+                  <term>rolesQuery</term>
+                  <listitem>
+                     <para>
+                        The prepared statement query equivalent to: <literal>select Role, RoleGroup from Roles where PrincipalID=?</literal>. If not specified this is the exact prepared statement that will                          be used.
+                     </para>
+                  </listitem>
+               </varlistentry>
+               <varlistentry>
+                  <term>ignorePasswordCase</term>
+                  <listitem>
+                     <para>
+                        A boolean flag indicating if the password comparison should ignore case. This can be useful for hashed password encoding where the case of the hashed password is not significant.
+                     </para>
+                  </listitem>
+               </varlistentry>
+            </variablelist>
+
+            <para>
+               An example <literal>DatabaseServerLoginModule</literal> configuration could be constructed as follows:
+            </para>
+
+            <programlisting>CREATE TABLE Users(username VARCHAR(64) PRIMARY KEY, passwd VARCHAR(64))
+CREATE TABLE UserRoles(username VARCHAR(64), userRoles VARCHAR(32))
+            </programlisting>
+
+            <para>
+               A corresponding <literal>login-config.xml</literal> entry would be:
+            </para>
+
+            <programlisting language="XML" role="XML">&lt;policy&gt;
+    &lt;application-policy name=&quot;testDB&quot;&gt;
+        &lt;authentication&gt;
+            &lt;login-module code=&quot;org.jboss.security.auth.spi.DatabaseServerLoginModule&quot;
+                             flag=&quot;required&quot;&gt;
+                &lt;module-option name=&quot;dsJndiName&quot;&gt;java:/MyDatabaseDS&lt;/module-option&gt;
+                &lt;module-option name=&quot;principalsQuery&quot;&gt;
+                    select passwd from Users username where username=?&lt;/module-option&gt;
+                &lt;module-option name=&quot;rolesQuery&quot;&gt;
+                    select userRoles, &apos;Roles&apos; from UserRoles where username=?&lt;/module-option&gt;
+            &lt;/login-module&gt;
+        &lt;/authentication&gt;
+    &lt;/application-policy&gt;
+&lt;/policy&gt;
+            </programlisting>
+         </section>
+
+         <section id="sect-LdapLoginModule">
+            <title>LdapLoginModule</title>
+            <para>
+               <literal>LdapLoginModule</literal> is a <literal>LoginModule</literal> implementation that authenticates against an LDAP server.  Use the <literal>LdapLoginModule</literal> if your username                  and credentials are stored in an LDAP server that is accessible using a JNDI LDAP provider.
+            </para>
+
+            <note>
+               <para>
+                  This login module also supports unauthenticated identity and password stacking.
+               </para>
+            </note>
+
+            <para>
+               The LDAP connectivity information is provided as configuration options that are passed through to the environment object used to create JNDI initial context. The standard LDAP JNDI properties                used include the following:
+            </para>
+
+            <variablelist>
+               <varlistentry>
+                  <term>
+                     <property>java.naming.factory.initial</property>
+                  </term>
+                  <listitem>
+                     <para>
+                        <classname>InitialContextFactory</classname> implementation class name. This defaults to the Sun LDAP provider implementation <literal>com.sun.jndi.ldap.LdapCtxFactory</literal>.
+                     </para>
+                  </listitem>
+               </varlistentry>
+               <varlistentry>
+                  <term>
+                     <property>java.naming.provider.url</property>
+                  </term>
+                  <listitem>
+                     <para>
+                        LDAP URL for the LDAP server.
+                     </para>
+                  </listitem>
+               </varlistentry>
+               <varlistentry>
+                  <term>
+                     <property>java.naming.security.authentication</property>
+                  </term>
+                  <listitem>
+                     <para>
+                        Security level to use. This defaults to <literal>simple</literal>.
+                     </para>
+                  </listitem>
+               </varlistentry>
+               <varlistentry>
+                  <term>
+                     <property>java.naming.security.protocol</property>
+                  </term>
+                  <listitem>
+                     <para>
+                        Transport protocol to use for secure access, such as, SSL.
+                     </para>
+                  </listitem>
+               </varlistentry>
+               <varlistentry>
+                  <term>
+                     <property>java.naming.security.principal</property>
+                  </term>
+                  <listitem>
+                     <para>
+                        Principal for authenticating the caller to the service. This is built from other properties as described below.
+                     </para>
+                  </listitem>
+               </varlistentry>
+               <varlistentry>
+                  <term>
+                     <property>java.naming.security.credentials</property>
+                  </term>
+                  <listitem>
+                     <para>
+                        Authentication scheme to use. For example, hashed password, clear-text password, key, certificate, and so on.
+                     </para>
+                  </listitem>
+               </varlistentry>
+            </variablelist>
+
+            <para>
+               The supported login module configuration options include the following:
+            </para>
+
+            <variablelist>
+               <varlistentry>
+                  <term>
+                     <property>principalDNPrefix</property>
+                  </term>
+                  <listitem>
+                     <para>
+                        Prefix added to the username to form the user distinguished name. See <literal>principalDNSuffix</literal> for more info.
+                     </para>
+                  </listitem>
+               </varlistentry>
+               <varlistentry>
+                  <term>
+                     <property>principalDNSuffix</property>
+                  </term>
+                  <listitem>
+                     <para>
+                        Suffix added to the username when forming the user distinguished name. This is useful if you prompt a user for a username and you don&apos;t want the user to have to enter the fully                          distinguished name. Using this property and <literal>principalDNSuffix</literal> the <literal>userDN</literal> will be formed as                                                                               <literal>principalDNPrefix + username + principalDNSuffix</literal>
+                     </para>
+                  </listitem>
+               </varlistentry>
+               <varlistentry>
+                  <term>
+                     <property>useObjectCredential</property>
+                  </term>
+                  <listitem>
+                     <para>
+                        Value that indicates the credential should be obtained as an opaque <literal>Object</literal> using the <literal>org.jboss.security.auth.callback.ObjectCallback</literal> type of                             <literal>Callback</literal> rather than as a <literal>char[]</literal> password using a JAAS <literal>PasswordCallback</literal>. This allows for passing non-<literal>char[]</literal>                        credential information to the LDAP server. The available values are <literal>true</literal> and <literal>false</literal>.
+                     </para>
+                  </listitem>
+               </varlistentry>
+               <varlistentry>
+                  <term>
+                     <property>rolesCtxDN</property>
+                  </term>
+                  <listitem>
+                     <para>
+                        Fixed, distinguished name to the context to search for user roles.
+                     </para>
+                  </listitem>
+               </varlistentry>
+               <varlistentry>
+                  <term>
+                     <property>userRolesCtxDNAttributeName</property>
+                  </term>
+                  <listitem>
+                     <para>
+                        Name of an attribute in the user object that contains the distinguished name to the context to search for user roles. This differs from <literal>rolesCtxDN</literal> in that the                              context to search for a user&apos;s roles can be unique for each user.
+                     </para>
+                  </listitem>
+               </varlistentry>
+               <varlistentry>
+                  <term>
+                     <property>roleAttributeID</property>
+                  </term>
+                  <listitem>
+                     <para>
+                        Name of the attribute containing the user roles. If not specified, this defaults to <literal>roles</literal>.
+                     </para>
+                  </listitem>
+               </varlistentry>
+               <varlistentry>
+                  <term>
+                     <property>roleAttributeIsDN</property>
+                  </term>
+                  <listitem>
+                     <para>
+                        Flag indicating whether the <literal>roleAttributeID</literal> contains the fully distinguished name of a role object, or the role name. The role name is taken from the value of the                          <literal>roleNameAttributeId</literal> attribute of the context name by the distinguished name.
+                     </para>
+
+                     <para>
+                        If true, the role attribute represents the distinguished name of a role object. If false, the role name is taken from the value of <literal>roleAttributeID</literal>. The default is                          <literal>false</literal>.
+                     </para>
+
+                     <note>
+                        <para>
+                           In certain directory schemas (e.g., MS ActiveDirectory), role attributes in the user object are stored as DNs to role objects instead of  simple names. For implementations that use                           this schema type, <property>roleAttributeIsDN</property>  must be set to true.
+                        </para>
+                     </note>
+                  </listitem>
+               </varlistentry>
+               <varlistentry>
+                  <term>
+                     <property>roleNameAttributeID</property>
+                  </term>
+                  <listitem>
+                     <para>
+                        Name of the attribute of the context pointed to by the <literal>roleCtxDN</literal> distinguished name value which contains the role name. If the <literal>roleAttributeIsDN</literal>                         property is set to true, this property is used to find the role object&apos;s name attribute. The default is <literal>group</literal>.
+                     </para>
+                  </listitem>
+               </varlistentry>
+               <varlistentry>
+                  <term>
+                     <property>uidAttributeID</property>
+                  </term>
+                  <listitem>
+                     <para>
+                        Name of the attribute in the object containing the user roles that corresponds to the userid. This is used to locate the user roles. If not specified this defaults to                                         <literal>uid</literal>.
+                     </para>
+                  </listitem>
+               </varlistentry>
+               <varlistentry>
+                  <term>
+                     <property>matchOnUserDN</property>
+                  </term>
+                  <listitem>
+                     <para>
+                        Flag that specifies whether  the search for user roles should match on the user&apos;s fully distinguished name. If true, the full <literal>userDN</literal> is used as the match                              value. If false, only the username is used as the match value against the <literal>uidAttributeName</literal> attribute. The default value is <literal>false</literal>.
+                     </para>
+                  </listitem>
+               </varlistentry>
+               <varlistentry>
+                  <term>
+                     <property>allowEmptyPasswords</property>
+                  </term>
+                  <listitem>
+                     <para>
+                        A flag indicating if empty (length 0) passwords should be passed to the LDAP server. An empty password is treated as an anonymous login by some LDAP servers and this may not be a                             desirable feature. To reject empty passwords, set this to <literal>false</literal>. If set to <literal>true</literal>, the LDAP server will validate the empty password. The default is                        <literal>true</literal>.
+                     </para>
+                  </listitem>
+               </varlistentry>
+            </variablelist>
+
+            <para>
+               User authentication is performed by connecting to the LDAP server, based on the login module configuration options. Connecting to the LDAP server is done by creating an                                       <literal>InitialLdapContext</literal> with an environment composed of the LDAP JNDI properties described previously in this section. The <property>Context.SECURITY_PRINCIPAL</property> is                    set to the distinguished name of the user as obtained by the callback handler in combination with the <property>principalDNPrefix</property> and <property>principalDNSuffix</property> option                 values, and the <property>Context.SECURITY_CREDENTIALS</property> property is either set to the <literal>String</literal> password or the <literal>Object</literal> credential depending on the                <property>useObjectCredential</property> option.
+            </para>
+
+            <para>
+               Once authentication has succeeded (<literal>InitialLdapContext</literal> instance is created), the user&apos;s roles are queried by performing a search on the <literal>rolesCtxDN</literal>                   location with search attributes set to the <property>roleAttributeName</property> and <property>uidAttributeName</property> option values. The roles names are obtaining by invoking the                       <methodname>toString</methodname> method on the role attributes in the search result set.
+            </para>
+
+            <example>
+               <title>login-config.xml Sample</title>
+               <para>
+                  The following is a sample <literal>login-config.xml</literal> entry.
+               </para>
+
+               <programlisting language="XML" role="XML">
+    &lt;application-policy name=&quot;testLDAP&quot;&gt;
+        &lt;authentication&gt;
+            &lt;login-module code=&quot;org.jboss.security.auth.spi.LdapLoginModule&quot;
+                          flag=&quot;required&quot;&gt;
+                &lt;module-option name=&quot;java.naming.factory.initial&quot;&gt; 
+                    com.sun.jndi.ldap.LdapCtxFactory
+                    &lt;/module-option&gt;
+                &lt;module-option name=&quot;java.naming.provider.url&quot;&gt;
+                    ldap://ldaphost.jboss.org:1389/
+                &lt;/module-option&gt;
+                &lt;module-option name=&quot;java.naming.security.authentication&quot;&gt;
+                    simple
+                &lt;/module-option&gt;
+                &lt;module-option name=&quot;principalDNPrefix&quot;&gt;uid=&lt;/module-option&gt;                    
+                &lt;module-option name=&quot;principalDNSuffix&quot;&gt;
+                    ,ou=People,dc=jboss,dc=org
+                &lt;/module-option&gt;
+
+                &lt;module-option name=&quot;rolesCtxDN&quot;&gt;
+                    ou=Roles,dc=jboss,dc=org
+                &lt;/module-option&gt;
+                &lt;module-option name=&quot;uidAttributeID&quot;&gt;member&lt;/module-option&gt;
+                &lt;module-option name=&quot;matchOnUserDN&quot;&gt;true&lt;/module-option&gt;
+
+                &lt;module-option name=&quot;roleAttributeID&quot;&gt;cn&lt;/module-option&gt;
+                &lt;module-option name=&quot;roleAttributeIsDN&quot;&gt;false &lt;/module-option&gt;
+            &lt;/login-module&gt;
+        &lt;/authentication&gt;
+    &lt;/application-policy&gt;
+               </programlisting>
+            </example>
+
+            <para>
+               An LDIF file representing the structure of the directory this data operates against is shown below.
+            </para>
+
+            <example id="exam-LDIF_File_Example">
+               <title>LDIF File Example</title>
+               <programlisting>dn: dc=jboss,dc=org
+objectclass: top
+objectclass: dcObject
+objectclass: organization
+dc: jboss
+o: JBoss
+
+dn: ou=People,dc=jboss,dc=org
+objectclass: top
+objectclass: organizationalUnit
+ou: People
+
+dn: uid=jduke,ou=People,dc=jboss,dc=org
+objectclass: top
+objectclass: uidObject
+objectclass: person
+uid: jduke
+cn: Java Duke
+sn: Duke
+userPassword: theduke
+
+dn: ou=Roles,dc=jboss,dc=org
+objectclass: top
+objectclass: organizationalUnit
+ou: Roles
+
+dn: cn=JBossAdmin,ou=Roles,dc=jboss,dc=org
+objectclass: top
+objectclass: groupOfNames
+cn: JBossAdmin
+member: uid=jduke,ou=People,dc=jboss,dc=org
+description: the JBossAdmin group
+               </programlisting>
+            </example>
+
+            <para>
+               The <literal>java.naming.factory.initial</literal>, <literal>java.naming.factory.url</literal> and <literal>java.naming.security</literal> options in the <literal>testLDAP</literal> login                    module configuration indicate the following conditions:
+            </para>
+
+            <itemizedlist>
+               <listitem>
+                  <para>
+                     The Sun LDAP JNDI provider implementation will be used 
+                  </para>
+               </listitem>
+               <listitem>
+                  <para>
+                     The LDAP server is located on host <literal>ldaphost.jboss.org</literal> on port 1389
+                  </para>
+               </listitem>
+               <listitem>
+                  <para>
+                     The LDAP simple authentication method will be use to connect to the LDAP server.
+                  </para>
+               </listitem>
+            </itemizedlist>
+
+            <para>
+               The login module attempts to connect to the LDAP server using a Distinguished Name (DN) representing the user it is trying to authenticate. This DN is constructed from the passed                             <literal>principalDNPrefix</literal>, the username of the user and the <literal>principalDNSuffix</literal> as described above. In <xref linkend="exam-LDIF_File_Example"/>, the username                      <literal>jduke</literal> would map to <literal>uid=jduke,ou=People,dc=jboss,dc=org</literal>.
+            </para>
+
+            <note>
+               <para>
+                  The example assumes the LDAP server authenticates users using the <literal>userPassword</literal> attribute of the user&apos;s entry (<literal>theduke</literal> in this example). Most LDAP                   servers operate in this manner, however  if your LDAP server handles authentication differently you must ensure LDAP is configured according to  your production environment requirements.
+               </para>
+            </note>
+
+            <para>
+               Once authentication succeeds, the roles on which authorization will be based are retrieved by performing a subtree search of the <literal>rolesCtxDN</literal> for entries whose                               <literal>uidAttributeID</literal> match the user. If <literal>matchOnUserDN</literal> is true, the search will be based on the full DN of the user. Otherwise the search will be based on the                  actual user name entered. In this example, the search is under <literal>ou=Roles,dc=jboss,dc=org</literal> for any entries that have a <literal>member</literal> attribute equal to                            <literal>uid=jduke,ou=People,dc=jboss,dc=org</literal>. The search would locate <literal>cn=JBossAdmin</literal> under the roles entry.
+            </para>
+
+            <para>
+               The search returns the attribute specified in the <literal>roleAttributeID</literal> option. In this example, the attribute is <literal>cn</literal>. The value returned would be                              <literal>JBossAdmin</literal>, so the jduke user is assigned to the <literal>JBossAdmin</literal> role.
+            </para>
+
+            <para>
+               A local LDAP server often provides identity and authentication services, but is unable to use  authorization services. This is because application roles don&apos;t always map well onto LDAP                  groups, and LDAP administrators are often hesitant to allow external application-specific data in central LDAP servers. For this reason, the LDAP authentication module is often paired with                   another login module, such as the database login module, that can provide roles more suitable to the application being developed.
+            </para>
+         </section>
+
+         <section id="sec-LdapExtLoginModule">
+            <title>LdapExtLoginModule</title>
+            <para>
+               The <classname>org.jboss.security.auth.spi.LdapExtLoginModule</classname> is an alternate ldap login module implementation that uses searches for locating both the user to bind as for                          authentication as well as the associated roles. The roles query will recursively follow distinguished names (DNs) to navigate a hierarchical role structure.
+            </para>
+
+            <para>
+               The <classname>LoginModule</classname> options include whatever options your LDAP JNDI provider supports. Examples of standard property names are:
+            </para>
+
+            <itemizedlist>
+               <listitem>
+                  <para>
+                     <methodname>Context.INITIAL_CONTEXT_FACTORY</methodname> = "java.naming.factory.initial"
+                  </para>
+               </listitem>
+               <listitem>
+                  <para>
+                     <methodname>Context.SECURITY_PROTOCOL</methodname> = "java.naming.security.protocol"
+                  </para>
+               </listitem>
+               <listitem>
+                  <para>
+                     <methodname>Context.PROVIDER_URL</methodname> = "java.naming.provider.url"
+                  </para>
+               </listitem>
+               <listitem>
+                  <para>
+                     <methodname>Context.SECURITY_AUTHENTICATION</methodname> = "java.naming.security.authentication"
+                  </para>
+               </listitem>
+               <listitem>
+                  <para>
+                     <methodname>Context.REFERRAL</methodname> = "java.naming.referral"
+                  </para>
+               </listitem>
+            </itemizedlist>
+
+            <para>
+               The authentication happens in 2 steps:
+            </para>
+
+            <orderedlist>
+               <listitem>
+                  <para>
+                     An initial bind to the ldap server is done using the bindDN and bindCredential options. The <methodname>bindDN</methodname> is some user with the ability to search both the                                   <methodname>baseCtxDN</methodname> and <methodname>rolesCtxDN</methodname> trees for the user and roles. The user DN to authenticate against is queried using the filter specified by the                      <methodname>baseFilter</methodname> attribute (see the <methodname>baseFilter</methodname> option description for its syntax).
+                  </para>
+               </listitem>
+               <listitem>
+                  <para>
+                     The resulting user DN is then authenticated by binding to ldap server using the user DN as the <classname>InitialLdapContext</classname> environment                                                           <methodname>Context.SECURITY_PRINCIPAL</methodname>. The <methodname>Context.SECURITY_CREDENTIALS</methodname> property is either set to the String password obtained by the callback                          handler.
+                  </para>
+               </listitem>
+            </orderedlist>
+
+            <para>
+               If this is successful, the associated user roles are queried using the <methodname>rolesCtxDN</methodname>, <methodname>roleAttributeID</methodname>,                                                          <methodname>roleAttributeIsDN</methodname>, <methodname>roleNameAttributeID</methodname>, and <methodname>roleFilter</methodname> options.
+            </para>
+
+            <para>
+               The full module properties include:
+            </para>
+
+            <itemizedlist>
+               <listitem>
+                  <para>
+                     <methodname>baseCtxDN</methodname>: The fixed DN of the context to start the user search from.
+                  </para>
+               </listitem>
+               <listitem>
+                  <para>
+                     <methodname>bindDN</methodname>: The DN used to bind against the ldap server for the user and roles queries. This is some DN with read/search permissions on the                                               <methodname>baseCtxDN</methodname> and <methodname>rolesCtxDN</methodname> values.
+                  </para>
+               </listitem>
+               <listitem>
+                  <para>
+                     <methodname>bindCredential</methodname>: The password for the <methodname>bindDN</methodname>. This can be encrypted if the <methodname>jaasSecurityDomain</methodname> is specified.
+                  </para>
+               </listitem>
+               <listitem>
+                  <para>
+                     <methodname>jaasSecurityDomain</methodname>: The JMX ObjectName of the <classname>JaasSecurityDomain</classname> to use to decrypt the                                                                         <methodname>java.naming.security.principal</methodname>. The encrypted form of the password is that returned by the <methodname>JaasSecurityDomain.encrypt64(byte[])</methodname> method.                      The <methodname>org.jboss.security.plugins.PBEUtils</methodname> class can also be used to generate the encrypted form.
+                  </para>
+               </listitem>
+               <listitem>
+                  <para>
+                     <methodname>baseFilter</methodname>: A search filter used to locate the context of the user to authenticate. The input username/userDN as obtained from the login module callback will be                      substituted into the filter anywhere a <code>{0}</code> expression is seen. This substitution behavior comes from the standard                                                                                 <methodname>DirContext.search(Name, String, Object[], SearchControls cons)</methodname> method. A common example for the search filter is <code>(uid={0})</code>.
+                  </para>
+               </listitem>
+               <listitem>
+                  <para>
+                     <methodname>rolesCtxDN</methodname>: The fixed DN of the context to search for user roles. Consider that this is not the Distinguished Name of where the actual roles are; rather, this is                     the DN of where the objects containing the user roles are (for example, for Active Directory, this is the DN where the user account is).
+                  </para>
+               </listitem>
+               <listitem>
+                  <para>
+                     <methodname>roleFilter</methodname>: A search filter used to locate the roles associated with the authenticated user. The input username/userDN as obtained from the login module callback                     will be substituted into the filter anywhere a <code>{0}</code> expression is seen. The authenticated <methodname>userDN</methodname> will be substituted into the filter anywhere a                           <code>{1}</code> is seen.  An example search filter that matches on the input username is: <code>(member={0})</code>. An alternative that matches on the authenticated                                         <methodname>userDN</methodname> is: <code>(member={1})</code>.
+                  </para>
+               </listitem>
+               <listitem>
+                  <para>
+                     <methodname>roleAttributeIsDN</methodname>: A flag indicating whether the user&apos;s role attribute contains the fully distinguished name of a role object, or the users&apos;s role                          attribute contains the role name. If false, the role name is taken from the value of the user&apos;s role attribute. If true, the role attribute represents the distinguished name of a                        role object. The role name is taken from the value of the <methodname>roleNameAttributeId</methodname> attribute of the corresponding object. In certain directory schemas (for example,                       Microsoft Active Directory), role <emphasis>(group)attributes</emphasis> in the user object are stored as DNs to role objects instead of as simple names, in which case, this property                         should be set to true. The default value of this property is false.
+                  </para>
+               </listitem>
+               <listitem>
+                  <para>
+                     <methodname>roleAttributeID</methodname>: The name of the role attribute of the context which corresponds to the name of the role. If the <methodname>roleAttributeIsDN</methodname>                           property is set to true, this property is the DN of the context to query for the <methodname>roleNameAttributeID</methodname> attribute. If the <methodname>roleAttributeIsDN</methodname>                     property is set to false, this property is the attribute name of the role name.
+                  </para>
+               </listitem>
+               <listitem>
+                  <para>
+                     <methodname>roleNameAttributeID</methodname>: The name of the role attribute of the context which corresponds to the name of the role. If the <methodname>roleAttributeIsDN</methodname>                       property is set to true, this property is used to find the role object&apos;s name attribute. If the <methodname>roleAttributeIsDN</methodname> property is set to false, this property is                     ignored.
+                  </para>
+               </listitem>
+               <listitem>
+                  <para>
+                     <methodname>distinguishedNameAttribute</methodname>: The name of an attribute in the user entry that contains the DN of the user. This may be necessary if the DN of the user itself                           contains special characters (backslash for example) that may prevent correct user mapping. Defaults to distinguishedName. If there is no such attribute, the entry&apos;s DN will be used.
+                  </para>
+               </listitem>
+               <listitem>
+                  <para>
+                     <methodname>roleRecursion</methodname> : How deep the role search will go below a given matching context. Disable with 0, which is the default.
+                  </para>
+               </listitem>
+               <listitem>
+                  <para>
+                     <methodname>searchTimeLimit</methodname>: The timeout in milliseconds for the user/role searches. Defaults to 10000 (10 seconds).
+                  </para>
+               </listitem>
+               <listitem>
+                  <para>
+                     <methodname>searchScope</methodname>: Sets the search scope to one of the strings. The default is <methodname>SUBTREE_SCOPE</methodname>.
+                  </para>
+                  <itemizedlist>
+                     <listitem>
+                        <para>
+                           <methodname>OBJECT_SCOPE</methodname>: only search the named roles context.
+                        </para>
+                     </listitem>
+                     <listitem>
+                        <para>
+                           <methodname>ONELEVEL_SCOPE</methodname>: search directly under the named roles context.
+                        </para>
+                     </listitem>
+                     <listitem>
+                        <para>
+                           <methodname>SUBTREE_SCOPE</methodname>:  If the roles context is not a DirContext, search only the object. If the roles context is a <emphasis>DirContext</emphasis>, search the                               subtree rooted at the named object, including the named object itself
+                        </para>
+                     </listitem>
+                  </itemizedlist>
+               </listitem>
+               <listitem>
+                  <para>
+                     <methodname>allowEmptyPasswords</methodname>: A flag indicating if <code>empty(length==0)</code> passwords should be passed to the LDAP server. An empty password is treated as an                             anonymous login by some LDAP servers and this may not be a desirable feature. Set this to false to reject empty passwords, true to have the ldap server validate the empty password. The                       default is true.
+                  </para>
+               </listitem>
+            </itemizedlist>
+         </section>
+
+         <section id="sect-BaseCertLoginModule">
+            <title>BaseCertLoginModule</title>
+            <para>
+               <literal>BaseCertLoginModule</literal> authenticates users based on X509 certificates. A typical use case for this login module is <literal>CLIENT-CERT</literal> authentication in the web                    tier.
+            </para>
+
+            <para>
+               This login module only performs authentication: you must combine it with another login module capable of acquiring  authorization roles to completely define access to a secured web or EJB                    component. Two subclasses of this login module, <literal>CertRolesLoginModule</literal> and <literal>DatabaseCertLoginModule</literal> extend the behavior to obtain the authorization roles                   from either a properties file or database.
+            </para>
+
+            <para>
+               The <literal>BaseCertLoginModule</literal> needs a <literal>KeyStore</literal> to perform user validation. This is obtained through a <literal>org.jboss.security.SecurityDomain</literal>                     implementation. Typically, the <literal>SecurityDomain</literal> implementation is configured using the <literal>org.jboss.security.plugins.JaasSecurityDomain</literal> MBean as shown in this                <filename>jboss-service.xml</filename> configuration fragment:
+            </para>
+
+            <programlisting language="XML" role="XML">&lt;mbean code=&quot;org.jboss.security.plugins.JaasSecurityDomain&quot;
+       name=&quot;jboss.ch8:service=SecurityDomain&quot;&gt;
+    &lt;constructor&gt;
+        &lt;arg type=&quot;java.lang.String&quot; value=&quot;jmx-console&quot;/&gt;
+    &lt;/constructor&gt;
+    &lt;attribute name=&quot;KeyStoreURL&quot;&gt;resource:localhost.keystore&lt;/attribute&gt;
+    &lt;attribute name=&quot;KeyStorePass&quot;&gt;unit-tests-server&lt;/attribute&gt;
+&lt;/mbean&gt;
+            </programlisting>
+
+            <para>
+               The configuration creates a security domain with the name <literal>jmx-console</literal>, with a <literal>SecurityDomain</literal> implementation available through JNDI under the name                        <literal>java:/jaas/jmx-console</literal>. The security domain follows the JBossSX security domain naming pattern.
+            </para>
+
+            <procedure id="proc-Secure_Web_Applications_With_Certs_Role_Based_Authorization">
+               <title>Secure Web Applications with Certificates and Role-based Authorization</title>
+               <para>
+                  This procedure describes how to secure a web application, such as the <filename>jmx-console.war</filename>, using client certificates and role-based authorization.
+               </para>
+
+               <step>
+                  <title>Declare Resources and Roles</title>
+                  <para>
+                     Modify <filename>web.xml</filename> to declare the resources to be secured along with the allowed roles and security domain to be used for authentication and authorization.
+                  </para>
+
+                  <programlisting language="XML" role="XML">&lt;?xml version=&quot;1.0&quot;?&gt;
+&lt;web-app version=&quot;2.5&quot;
+   xmlns=&quot;http://java.sun.com/xml/ns/javaee&quot;
+   xmlns:xsi=&quot;http://www.w3.org/2001/XMLSchema-instance&quot;
+   xsi:schemaLocation=&quot;http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd&quot;&gt;
+   
+ ...
+   &lt;!-- A security constraint that restricts access to the HTML JMX console
+   to users with the role JBossAdmin. Edit the roles to what you want and
+   uncomment the WEB-INF/jboss-web.xml/security-domain element to enable
+   secured access to the HTML JMX console.
+   --&gt;
+   &lt;security-constraint&gt;
+     &lt;web-resource-collection&gt;
+       &lt;web-resource-name&gt;HtmlAdaptor&lt;/web-resource-name&gt;
+       &lt;description&gt;An example security config that only allows users with the
+         role JBossAdmin to access the HTML JMX console web application
+       &lt;/description&gt;
+       &lt;url-pattern&gt;/*&lt;/url-pattern&gt;
+     &lt;/web-resource-collection&gt;
+     &lt;auth-constraint&gt;
+       &lt;role-name&gt;JBossAdmin&lt;/role-name&gt;
+     &lt;/auth-constraint&gt;
+   &lt;/security-constraint&gt;
+
+   &lt;login-config&gt;
+      &lt;auth-method&gt;BASIC&lt;/auth-method&gt;
+      &lt;realm-name&gt;JBoss JMX Console&lt;/realm-name&gt;
+   &lt;/login-config&gt;
+
+   &lt;security-role&gt;
+      &lt;role-name&gt;JBossAdmin&lt;/role-name&gt;
+   &lt;/security-role&gt;
+&lt;/web-app&gt;
+                  </programlisting>
+               </step>
+
+               <step>
+                  <title>Specify the JBoss Security Domain</title>
+                  <para>
+                     In the <literal>jboss-web.xml</literal> file, specify the required security domain.
+                  </para>
+
+                  <programlisting language="XML" role="XML">&lt;jboss-web&gt;
+    &lt;security-domain&gt;jmx-console&lt;/security-domain&gt;
+&lt;/jboss-web&gt;
+                  </programlisting>
+               </step>
+
+               <step>
+                  <title>Specify Login Module Configuration</title>
+                  <para>
+                     Define the login module configuration for the jmx-console security domain you just specified. This is done in the <literal>conf/login-config.xml</literal> file.
+                  </para>
+
+                  <programlisting language="XML" role="XML">&lt;application-policy name=&quot;jmx-console&quot;&gt;
+    &lt;authentication&gt;
+        &lt;login-module code=&quot;org.jboss.security.auth.spi.BaseCertLoginModule&quot; 
+                      flag=&quot;required&quot;&gt;
+            &lt;module-option name=&quot;password-stacking&quot;&gt;useFirstPass&lt;/module-option&gt;
+            &lt;module-option name=&quot;securityDomain&quot;&gt;jmx-console&lt;/module-option&gt;
+        &lt;/login-module&gt;
+        &lt;login-module code=&quot;org.jboss.security.auth.spi.UsersRolesLoginModule&quot; 
+                      flag=&quot;required&quot;&gt;
+            &lt;module-option name=&quot;password-stacking&quot;&gt;useFirstPass&lt;/module-option&gt;
+            &lt;module-option name=&quot;usersProperties&quot;&gt;jmx-console-users.properties&lt;/module-option&gt;
+            &lt;module-option name=&quot;rolesProperties&quot;&gt;jmx-console-roles.properties&lt;/module-option&gt;
+        &lt;/login-module&gt;
+    &lt;/authentication&gt;
+&lt;/application-policy&gt;
+                  </programlisting>
+               </step>
+            </procedure>
+
+            <para>
+               <xref linkend="proc-Secure_Web_Applications_With_Certs_Role_Based_Authorization"/>shows the <literal>BaseCertLoginModule</literal> is used for authentication of the client cert, and the                      <literal>UsersRolesLoginModule</literal> is only used for authorization due to the <literal>password-stacking=useFirstPass</literal> option. Both the <literal>localhost.keystore</literal> and                the <literal>jmx-console-roles.properties</literal> require an entry that maps to the principal associated with the client cert.
+            </para>
+
+            <para>
+               By default, the principal is created using the client certificate distinguished name, such as the DN specified in <xref linkend="exam-Certificate_Example"/>.
+            </para>
+
+            <example id="exam-Certificate_Example">
+               <title>Certificate Example</title>
+               <screen>[conf]$ keytool -printcert -file unit-tests-client.export
+Owner: CN=unit-tests-client, OU=JBoss Inc., O=JBoss Inc., ST=Washington, C=US
+Issuer: CN=jboss.com, C=US, ST=Washington, L=Snoqualmie Pass, EMAILADDRESS=admin
+@jboss.com, OU=QA, O=JBoss Inc.
+Serial number: 100103
+Valid from: Wed May 26 07:34:34 PDT 2004 until: Thu May 26 07:34:34 PDT 2005
+Certificate fingerprints:
+         MD5:  4A:9C:2B:CD:1B:50:AA:85:DD:89:F6:1D:F5:AF:9E:AB
+         SHA1: DE:DE:86:59:05:6C:00:E8:CC:C0:16:D3:C2:68:BF:95:B8:83:E9:58
+               </screen>
+            </example>
+
+            <para>
+               The <literal>localhost.keystore</literal> would need the certificate in <xref linkend="exam-Certificate_Example"/> stored with an alias of                                                                     <literal>CN=unit-tests-client, OU=JBoss Inc., O=JBoss Inc., ST=Washington, C=US</literal>. The <literal>jmx-console-roles.properties</literal> would also need an entry for the same entry.                    Since the DN contains  characters that are normally treated as delimiters, you must  escape the problem characters using a backslash (&apos;<literal>\</literal>&apos;) as illustrated below.
+            </para>
+
+            <screen># A sample roles.properties file for use with the UsersRolesLoginModule
+CN\=unit-tests-client,\ OU\=JBoss\ Inc.,\ O\=JBoss\ Inc.,\ ST\=Washington,\ C\=US=JBossAdmin
+admin=JBossAdmin
+            </screen>
+         </section>
+
+         <section id="sect-IdentityLoginModule">
+            <title>IdentityLoginModule</title>
+            <para>
+               <literal>IdentityLoginModule</literal> is a simple login module that associates a hard-coded user name to any subject authenticated against the module. It creates a                                           <literal>SimplePrincipal</literal> instance using the name specified by the <literal>principal</literal> option.
+            </para>
+
+            <note>
+               <para>
+                  This module supports password stacking.
+               </para>
+            </note>
+
+            <para>
+               This login module is useful when you need to provide a fixed identity to a service, and in development environments when you want to test the security associated with a given principal and                   associated roles.
+            </para>
+
+            <para>
+               The supported login module configuration options include:
+            </para>
+
+            <variablelist>
+               <varlistentry>
+                  <term>principal</term>
+                  <listitem>
+                     <para>
+                        This is the name to use for the <literal>SimplePrincipal</literal> all users are authenticated as. The principal name defaults to <literal>guest</literal> if no principal option is                           specified.
+                     </para>
+                  </listitem>
+               </varlistentry>
+               <varlistentry>
+                  <term>roles</term>
+                  <listitem>
+                     <para>
+                        This is a comma-delimited list of roles that will be assigned to the user.
+                     </para>
+                  </listitem>
+               </varlistentry>
+            </variablelist>
+
+            <para>
+               A sample XMLLoginConfig configuration entry is described below. The entry authenticates all users as the principal named <literal>jduke</literal> and assign role names of                                     <literal>TheDuke</literal>, and <literal>AnimatedCharacter</literal>:
+            </para>
+
+            <programlisting language="XML" role="XML">&lt;policy&gt;
+    &lt;application-policy name=&quot;testIdentity&quot;&gt;
+        &lt;authentication&gt;
+            &lt;login-module code=&quot;org.jboss.security.auth.spi.IdentityLoginModule&quot;
+                         flag=&quot;required&quot;&gt;
+                &lt;module-option name=&quot;principal&quot;&gt;jduke&lt;/module-option&gt;
+                &lt;module-option name=&quot;roles&quot;&gt;TheDuke,AnimatedCharacter&lt;/module-option&gt;
+            &lt;/login-module&gt;
+        &lt;/authentication&gt;
+    &lt;/application-policy&gt;
+&lt;/policy&gt; 
+            </programlisting>
+         </section>
+
+         <section id="sect-RunAsLoginModule">
+            <title>RunAsLoginModule</title>
+            <para>
+               <literal>RunAsLoginModule</literal> (<classname>org.jboss.security.auth.spi.RunAsLoginModule</classname>) is a helper module that pushes a run as role onto the stack for the duration of the                  login phase of authentication, and pops the run as role in either the commit or abort phase.
+            </para>
+
+            <para>
+               The purpose of this login module is to provide a role for other login modules that must access secured resources in order to perform their authentication (for example, a login module that                    accesses a secured EJB). <literal>RunAsLoginModule</literal> must be configured ahead of the login modules that require a run as role established.
+            </para>
+
+            <para>
+               The only login module configuration option is:
+            </para>
+
+            <variablelist>
+               <varlistentry>
+                  <term>roleName</term>
+                  <listitem>
+                     <para>
+                        Name of the role to use as the run as role during login phase. If not specified a default of <literal>nobody</literal> is used.
+                     </para>
+                  </listitem>
+               </varlistentry>
+            </variablelist>
+         </section>
+
+         <section id="sect-ClientLoginModule">
+            <title>ClientLoginModule</title>
+            <para>
+               <literal>ClientLoginModule</literal> (<classname>org.jboss.security.ClientLoginModule</classname>) is an implementation of <literal>LoginModule</literal> for use by JBoss clients for                         establishing caller identity and credentials. This simply sets the principal to the value of the <literal>NameCallback</literal> filled in by the <literal>callbackhandler</literal>, and the                  credential to the value of the <literal>PasswordCallback</literal> filled in by the <literal>callbackhandler</literal> in the security context.
+            </para>
+
+            <para>
+               <literal>ClientLoginModule</literal> is the only supported mechanism for a client to establish the current thread&apos;s caller. Both stand-alone client applications, and server environments                 (acting as JBoss EJB clients where the security environment has not been configured to use JBossSX transparently) must use <literal>ClientLoginModule</literal>.
+            </para>
+
+            <para>
+               Note that this login module does not perform any authentication. It merely copies the login information provided to it into the JBoss server EJB invocation layer for subsequent authentication                on the server. If you need to perform client-side authentication of users you would need to configure another login module in addition to the <literal>ClientLoginModule</literal>.
+            </para>
+
+            <para>
+               The supported login module configuration options include the following:
+            </para>
+
+            <variablelist>
+               <varlistentry>
+                  <term>multi-threaded</term>
+                  <listitem>
+                     <para>
+                        Value that specifies the way login threads connect to principal and credential storage sources. When set to true, each login thread has its own principal and credential storage and                           each separate thread must perform its own login. This is useful in client environments where multiple user identities are active in separate threads. When set to false the login                              identity and credentials are global variables that apply to all threads in the VM. The default setting is <literal>false</literal>.
+                     </para>
+                  </listitem>
+               </varlistentry>
+               <varlistentry>
+                  <term>restore-login-identity</term>
+                  <listitem>
+                     <para>
+                        Value that specifies whether the <literal>SecurityAssociation</literal> principal and credential seen on entry to the <methodname>login()</methodname> method are saved and restored on                        either abort or logout. This is necessary if you must change identities and then restore the original caller identity. If set to <literal>true</literal>, the principal and credential                         information is saved and restored on abort or logout. If set to <literal>false</literal>, abort and logout clear the <literal>SecurityAssociation</literal>. The default value is                              <literal>false</literal>.
+                     </para>
+                  </listitem>
+               </varlistentry>
+            </variablelist>
+         </section>
+      </section>
+
+      <section id="sect-Custom_Modules">
+         <title>Custom Modules</title>
+         <para>
+            If the login modules bundled with the JBossSX framework do not work with your security environment, you can write your own custom login module implementation. The                                             <literal>JaasSecurityManager</literal> requires a particular usage pattern of the <literal>Subject</literal> principals set. You must understand the JAAS Subject class&apos;s information storage             features and the expected usage of these features to write a login module that works with the <literal>JaasSecurityManager</literal>.
+         </para>
+
+         <para>
+            This section examines this requirement and introduces two abstract base <literal>LoginModule</literal> implementations that can help you implement custom login modules.
+         </para>
+
+         <para>
+            You can obtain security information associated with a <literal>Subject</literal> by using the following methods:
+         </para>
+
+         <programlisting language="Java" role="JAVA">java.util.Set getPrincipals()
+java.util.Set getPrincipals(java.lang.Class c)
+java.util.Set getPrivateCredentials()
+java.util.Set getPrivateCredentials(java.lang.Class c)
+java.util.Set getPublicCredentials()
+java.util.Set getPublicCredentials(java.lang.Class c)
+         </programlisting>
+
+         <para>
+            For <literal>Subject</literal> identities and roles, JBossSX has selected the most logical choice: the principals sets obtained via <literal>getPrincipals()</literal> and                                     <literal>getPrincipals(java.lang.Class)</literal>. The usage pattern is as follows:
+         </para>
+
+         <itemizedlist>
+            <listitem>
+               <para>
+                  User identities (for example; username, social security number, employee ID) are stored as <literal>java.security.Principal</literal> objects in the <literal>Subject</literal>                                <literal>Principals</literal> set. The <literal>Principal</literal> implementation that represents the user identity must base comparisons and equality on the name of the principal. A                        suitable implementation is available as the <literal>org.jboss.security.SimplePrincipal</literal> class. Other <literal>Principal</literal> instances may be added to the                                      <literal>Subject</literal><literal>Principals</literal> set as needed.
+               </para>
+            </listitem>
+            <listitem>
+               <para>
+                  Assigned user roles are also stored in the <literal>Principals</literal> set, and are grouped in named role sets using <literal>java.security.acl.Group</literal> instances. The                               <literal>Group</literal> interface defines a collection of <literal>Principal</literal>s and/or <literal>Group</literal>s, and is a subinterface of                                                            <literal>java.security.Principal</literal>.
+               </para>
+            </listitem>
+            <listitem>
+               <para>
+                  Any number of role sets can be assigned to a <literal>Subject</literal>.
+               </para>
+            </listitem>
+         </itemizedlist>
+
+         <itemizedlist>
+            <listitem>
+               <para>
+                  The JBossSX framework uses two well-known role sets with the names <literal>Roles</literal> and <literal>CallerPrincipal</literal>. 
+               </para>
+
+               <itemizedlist>
+                  <listitem>
+                     <para>
+                        The <literal>Roles</literal> group is the collection of <literal>Principal</literal>s for the named roles as known in the application domain under which the <literal>Subject</literal>                        has been authenticated. This role set is used by methods like the <literal>EJBContext.isCallerInRole(String)</literal>, which EJBs can use to see if the current caller belongs to the                         named application domain role. The security interceptor logic that performs method permission checks also uses this role set.
+                     </para>
+                  </listitem>
+                  <listitem>
+                     <para>
+                        The <literal>CallerPrincipal</literal><literal>Group</literal> consists of the single <literal>Principal</literal> identity assigned to the user in the application domain. The                                <literal>EJBContext.getCallerPrincipal()</literal> method uses the <literal>CallerPrincipal</literal> to allow the application domain to map from the operation environment identity to                        a user identity suitable for the application. If a <literal>Subject</literal> does not have a <literal>CallerPrincipal</literal><literal>Group</literal>, the application identity is                          the same used for login.
+                     </para>
+                  </listitem>
+               </itemizedlist>
+            </listitem>
+         </itemizedlist>
+
+         <section id="sect-Custom_LoginModule_Example">
+            <title>Custom LoginModule Example</title>
+            <para>
+               The following information will help you to create a custom Login Module example that extends the <literal>UsernamePasswordLoginModule</literal> and obtains a user&apos;s password and role                    names from a JNDI lookup.
+            </para>
+
+            <para>
+               At the end of this section you will have created a custom JNDI context login module that  will return a user&apos;s password if you perform a lookup on the context using a name of the form                   <literal>password/&lt;username&gt;</literal> (where <literal>&lt;username&gt;</literal> is the current user being authenticated). Similarly, a lookup of the form                                              <literal>roles/&lt;username&gt;</literal> returns the requested user&apos;s roles.
+            </para>
+
+            <para>
+               <xref linkend="A_Custom_LoginModule_Example-_A_JndiUserAndPass_custom_login_module"/> shows the source code for the <literal>JndiUserAndPass</literal> custom login module.
+            </para>
+
+            <para>
+               Note that because this extends the JBoss <literal>UsernamePasswordLoginModule</literal>, all <literal>JndiUserAndPass</literal> does is obtain the user&apos;s password and roles from the JNDI                store. The <literal>JndiUserAndPass</literal> does not interact with the JAAS <literal>LoginModule</literal> operations.
+            </para>
+
+            <example id="A_Custom_LoginModule_Example-_A_JndiUserAndPass_custom_login_module">
+               <title> JndiUserAndPass Custom Login Module</title>
+               <programlisting language="Java" role="JAVA">package org.jboss.book.security.ex2;
+                    
+import java.security.acl.Group;
+import java.util.Map;
+import javax.naming.InitialContext;
+import javax.naming.NamingException;
+import javax.security.auth.Subject;
+import javax.security.auth.callback.CallbackHandler;
+import javax.security.auth.login.LoginException;
+
+import org.jboss.security.SimpleGroup;
+import org.jboss.security.SimplePrincipal;
+import org.jboss.security.auth.spi.UsernamePasswordLoginModule;
+
+/** 
+ *  An example custom login module that obtains passwords and roles
+ *  for a user from a JNDI lookup.
+ *     
+ *  @author Scott.Stark@jboss.org
+ *  @version $Revision: 1.4 $
+*/
+public class JndiUserAndPass 
+    extends UsernamePasswordLoginModule
+{
+    /** The JNDI name to the context that handles the password/username lookup */
+    private String userPathPrefix;
+    /** The JNDI name to the context that handles the roles/ username lookup */
+    private String rolesPathPrefix;
+    
+    /**
+     * Override to obtain the userPathPrefix and rolesPathPrefix options.
+     */
+    public void initialize(Subject subject, CallbackHandler callbackHandler,
+                           Map sharedState, Map options)
+    {
+        super.initialize(subject, callbackHandler, sharedState, options);
+        userPathPrefix = (String) options.get(&quot;userPathPrefix&quot;);
+        rolesPathPrefix = (String) options.get(&quot;rolesPathPrefix&quot;);
+    }
+    
+    /**
+     *  Get the roles the current user belongs to by querying the
+     * rolesPathPrefix + &apos;/&apos; + super.getUsername() JNDI location.
+     */
+    protected Group[] getRoleSets() throws LoginException
+    {
+        try {
+            InitialContext ctx = new InitialContext();
+            String rolesPath = rolesPathPrefix + &apos;/&apos; + super.getUsername();
+
+            String[] roles = (String[]) ctx.lookup(rolesPath);
+            Group[] groups = {new SimpleGroup(&quot;Roles&quot;)};
+            log.info(&quot;Getting roles for user=&quot;+super.getUsername());
+            for(int r = 0; r &lt; roles.length; r ++) {
+                SimplePrincipal role = new SimplePrincipal(roles[r]);
+                log.info(&quot;Found role=&quot;+roles[r]);
+                groups[0].addMember(role);
+            }
+            return groups;
+        } catch(NamingException e) {
+            log.error(&quot;Failed to obtain groups for
+                        user=&quot;+super.getUsername(), e);
+            throw new LoginException(e.toString(true));
+        }
+    }
+                    
+    /** 
+     * Get the password of the current user by querying the
+     * userPathPrefix + &apos;/&apos; + super.getUsername() JNDI location.
+     */
+    protected String getUsersPassword() 
+        throws LoginException
+    {
+        try {
+            InitialContext ctx = new InitialContext();
+            String userPath = userPathPrefix + &apos;/&apos; + super.getUsername();
+            log.info(&quot;Getting password for user=&quot;+super.getUsername());
+            String passwd = (String) ctx.lookup(userPath);
+            log.info(&quot;Found password=&quot;+passwd);
+            return passwd;
+        } catch(NamingException e) {
+            log.error(&quot;Failed to obtain password for
+                        user=&quot;+super.getUsername(), e);
+            throw new LoginException(e.toString(true));
+        }
+    }   
+}
+               </programlisting>
+            </example>
+
+            <para>
+               The details of the JNDI store are found in the <literal>org.jboss.book.security.ex2.service.JndiStore</literal> MBean. This service binds an <literal>ObjectFactory</literal> that returns a                   <literal>javax.naming.Context</literal> proxy into JNDI. The proxy handles lookup operations done against it by checking the prefix of the lookup name against <literal>password</literal> and                 <literal>roles</literal>.
+            </para>
+
+            <para>
+               When the name begins with <literal>password</literal>, a user&apos;s password is being requested. When the name begins with <literal>roles</literal> the user&apos;s roles are being requested.                The example implementation always returns a password of <literal>theduke</literal> and an array of roles names equal to <literal>{&quot;TheDuke&quot;, &quot;Echo&quot;}</literal> regardless of               what the username is. You can experiment with other implementations as you wish.
+            </para>
+
+            <para>
+               The example code includes a simple session bean for testing the custom login module. To build, deploy and run the example, execute the following command in the examples directory.
+            </para>
+
+            <screen>[examples]$ ant -Dchap=security -Dex=2 run-example
+...
+run-example2:
+     [echo] Waiting for 5 seconds for deploy...
+     [java] [INFO,ExClient] Login with username=jduke, password=theduke
+     [java] [INFO,ExClient] Looking up EchoBean2
+     [java] [INFO,ExClient] Created Echo
+     [java] [INFO,ExClient] Echo.echo(&apos;Hello&apos;) = Hello
+            </screen>
+
+            <para>
+               The choice of using the <literal>JndiUserAndPass</literal> custom login module for the server side authentication of the user is determined by the login configuration for the example security                domain. The EJB JAR <literal>META-INF/jboss.xml</literal> descriptor sets the security domain.
+            </para>
+
+            <programlisting language="XML" role="XML">&lt;?xml version=&quot;1.0&quot;?&gt;
+&lt;jboss&gt;
+    &lt;security-domain&gt;security-ex2&lt;/security-domain&gt;
+&lt;/jboss&gt;
+            </programlisting>
+
+            <para>
+               The SAR <literal>META-INF/login-config.xml</literal> descriptor defines the login module configuration.
+            </para>
+
+            <programlisting language="XML" role="XML">&lt;application-policy name = &quot;security-ex2&quot;&gt;
+    &lt;authentication&gt;
+        &lt;login-module code=&quot;org.jboss.book.security.ex2.JndiUserAndPass&quot;
+                      flag=&quot;required&quot;&gt;
+            &lt;module-option name = &quot;userPathPrefix&quot;&gt;/security/store/password&lt;/module-option&gt;
+            &lt;module-option name = &quot;rolesPathPrefix&quot;&gt;/security/store/roles&lt;/module-option&gt;
+        &lt;/login-module&gt;
+    &lt;/authentication&gt;
+&lt;/application-policy&gt;
+            </programlisting>
+         </section>
+      </section>
+   </chapter>

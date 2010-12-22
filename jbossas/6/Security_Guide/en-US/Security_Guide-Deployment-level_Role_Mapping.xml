@@ -1,0 +1,57 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd">
+
+   <chapter id="Deployment-level_Role_Mapping">
+      <title>Deployment-level Role Mapping </title>
+      <para>
+         In JBoss AS 6, it is possible to map additional roles at the deployment level from those derived at the security domain level (such as at the EAR level). This is achieved by declaring the                    <classname>org.jboss.security.mapping.providers.DeploymentRolesMappingProvider</classname> class as the value for the <parameter>class</parameter> attribute in the                                            <sgmltag>&lt;mapping-module&gt;</sgmltag> element. Additionally, the <parameter>type</parameter> attribute must be set to <literal>role</literal>.
+      </para>
+
+      <para>
+         By configuring the mapping configuration element within the role-based parameter, you can force additional role interpretation to the declared principals specified for the particular deployment              (war, ear, ejb-jar etc).
+      </para>
+
+      <important>
+         <title>Important: &lt;rolemapping&gt; deprecated for &lt;mapping&gt;</title>
+            <para>
+               In previous versions, the <sgmltag>&lt;rolemapping&gt;</sgmltag> element contained the <sgmltag>&lt;mapping-module&gt;</sgmltag> element and class declaration.                                                <sgmltag>&lt;rolemapping&gt;</sgmltag> has now been deprecated, and replaced with the <sgmltag>&lt;mapping&gt;</sgmltag> element.
+            </para>
+      </important>
+
+      <example>
+         <title>&lt;mapping-module&gt; declaration</title>
+         <programlisting language="XML" role="XML">&lt;application-policy name=&quot;some-sec-domain&quot;&gt;
+&lt;authentication&gt;
+...
+&lt;/authentication&gt;
+&lt;mapping&gt;
+   &lt;mapping-module code=&quot;org.jboss.security.mapping.providers.DeploymentRolesMappingProvider&quot;
+                   type=&quot;role&quot;/&gt;
+&lt;/mapping&gt;
+...
+&lt;/application-policy&gt;
+         </programlisting>
+      </example>
+
+      <para>
+         Once the security domain is configured correctly, you can append the <sgmltag>&lt;security-role&gt;</sgmltag> element group as a child element of the <sgmltag>&lt;assembly-descriptor&gt;</sgmltag>           to the <filename>jboss.xml</filename>, or <filename>jboss-web.xml</filename> files.
+      </para>
+
+      <example id="exam-Deploy_Level_Security_Role_Declaration">
+         <title>&lt;security-role&gt; declaration</title>
+         <programlisting>&lt;assembly-descriptor&gt;
+  ...
+    &lt;security-role&gt;
+      &lt;role-name&gt;Support&lt;/role-name&gt;
+      &lt;principal-name&gt;Mark&lt;/principal-name&gt; 
+      &lt;principal-name&gt;Tom&lt;/principal-name&gt;
+    &lt;/security-role&gt;
+  ...
+&lt;/assembly-descriptor&gt;
+         </programlisting>
+      </example>
+
+      <para>
+         In <xref linkend="exam-Deploy_Level_Security_Role_Declaration"/>, a security role relating to Support principals is implemented in addition to the base security role information contained  in                <filename>jboss.xml</filename> or <filename>jboss-web.xml</filename>.
+      </para>
+   </chapter>

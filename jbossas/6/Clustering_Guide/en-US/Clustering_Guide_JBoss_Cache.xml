@@ -1,0 +1,1113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.3//EN" "http://www.oasis-open.org/docbook/xml/4.3/docbookx.dtd">
+
+<chapter id="jbosscache.chapt">
+    <title>JBoss Cache Configuration and Deployment</title>
+    <para>JBoss Cache provides the underlying distributed caching support used
+      by many of the standard clustered services in a JBoss AS cluster. You can
+      also deploy JBoss Cache in your own application to handle custom caching
+      requirements. In this chapter we provide some background on the main
+      configuration options available with JBoss Cache, with an emphasis on
+      how those options relate to the JBoss Cache usage by the standard clustered
+      services the AS provides. We then discuss the different options available 
+      for deploying a custom cache in the AS.
+    </para>
+    <para>Users considering deploying JBoss Cache for direct use by their own
+      application are strongly encouraged to read the JBoss Cache
+      documentation available at http://www.jboss.org/jbosscache.</para>
+      
+    <para>See also <xref linkend="clustering-blocks-jbc"/> for information on
+    how the standard JBoss AS clustered services use JBoss Cache.</para>
+    
+    <section id="jbosscache-configuration">
+      <title>Key JBoss Cache Configuration Options</title>
+      <para>JBoss AS ships with a reasonable set of default JBoss Cache 
+      configurations that are suitable for the standard clustered service
+      use cases (e.g. web session replication or JPA/Hibernate caching).  
+      Most applications that involve the standard
+      clustered services just work out of the box with the default configurations. 
+      You only need to tweak them when you are deploying an application that 
+      has special network or performance requirements. In this section we
+      provide a brief overview of some of the key configuration choices. This
+      is by no means a complete discussion; for full details users interested in moving
+      beyond the default configurations are encouraged to read the JBoss Cache
+      documentation available at http://www.jboss.org/jbosscache.</para>
+      
+      <para>Most JBoss Cache configuration examples in this section use the 
+      JBoss Microcontainer schema for building up an <literal>org.jboss.cache.config.Configuration</literal>
+      object graph from XML.  JBoss Cache has its own custom XML schema, but
+      the standard JBoss AS CacheManager service uses the JBoss Microcontainer
+      schema to be consistent with most other internal AS services.</para>
+      
+      <para>Before getting into the key configuration options, let's have a
+      look at the most likely place that a user would encounter them.</para>
+      
+      <section id="jbosscache-configuration-cachemanager">
+          <title>Editing the CacheManager Configuration</title>
+          <para>As discussed in <xref linkend="clustering-blocks-jbc-cachemanager"/>, 
+          the standard JBoss AS clustered services use the CacheManager service 
+          as a factory for JBoss Cache instances. So, cache configuration changes 
+          are likely to involve edits to the CacheManager service.</para>
+          
+          <note><para>Users can also use the CacheManager as a factory for
+          custom caches used by directly by their own applications; see
+          <xref linkend="jbosscache-custom-deployment-cachemgr"/>.</para></note>
+          
+          <para>The CacheManager is configured via the 
+          <literal>deploy/cluster/jboss-cache-manager.sar/META-INF/jboss-cache-manager-jboss-beans.xml</literal> 
+          file. The element most likely to be edited is the "CacheConfigurationRegistry" 
+          bean, which maintains a registry of all the named JBC configurations 
+          the CacheManager knows about. Most edits to this file would 
+          involve adding a new JBoss Cache configuration or changing a 
+          property of an existing one.</para>
+          
+          <para>The following is a redacted version of the "CacheConfigurationRegistry" 
+          bean configuration:</para>
+                
+                <programlisting><![CDATA[<bean name="CacheConfigurationRegistry" 
+      class="org.jboss.ha.cachemanager.DependencyInjectedConfigurationRegistry">
+   
+   <!-- If users wish to add configs using a more familiar JBC config format
+        they can add them to a cache-configs.xml file specified by this property.
+        However, use of the microcontainer format used below is recommended.
+   <property name="configResource">META-INF/jboss-cache-configs.xml</property>      
+   -->
+      
+   <!-- The configurations. A Map<String name, Configuration config> -->
+   <property name="newConfigurations">
+      <map keyClass="java.lang.String" valueClass="org.jboss.cache.config.Configuration">
+   
+   <!-- The standard configurations follow.  You can add your own and/or edit these. -->   
+      
+   <!-- Standard cache used for web sessions -->
+   <entry><key>standard-session-cache</key>
+   <value>      
+      <bean name="StandardSessionCacheConfig" class="org.jboss.cache.config.Configuration">                 
+      
+          .... details of the standard-session-cache configuration
+      </bean>      
+   </value>
+   </entry>
+   
+   <!-- Appropriate for web sessions with FIELD granularity -->
+   <entry><key>field-granularity-session-cache</key>
+   <value>      
+      
+      <bean name="FieldSessionCacheConfig" class="org.jboss.cache.config.Configuration">              
+           .... details of the field-granularity-standard-session-cache configuration
+      </bean>      
+
+   </value>
+
+   </entry>
+
+   ... entry elements for the other configurations
+
+  </map>
+  </property>
+</bean>]]></programlisting>
+
+            <para>The actual JBoss Cache configurations are specified using the 
+            JBoss Microcontainer's schema rather than one of the standard JBoss 
+            Cache configuration formats. When JBoss Cache parses one of its 
+            standard configuration formats, it creates a Java Bean of type 
+            <literal>org.jboss.cache.config.Configuration</literal> with a tree 
+            of child Java Beans for some of the more complex sub-configurations 
+            (i.e. cache loading, eviction, buddy replication). Rather than 
+            delegating this task of XML parsing/Java Bean creation to JBC, we 
+            let the AS's microcontainer do it directly. This has the advantage 
+            of making the microcontainer aware of the configuration beans, which 
+            in later AS 5.x releases will be helpful in allowing external 
+            management tools to manage the JBC configurations.</para>
+            
+            <para>The configuration format should be fairly self-explanatory if 
+            you look at the standard configurations the AS ships; they include 
+            all the major elements. The types and properties of the various java 
+            beans that make up a JBoss Cache configuration can be seen in the 
+            JBoss Cache javadocs.  Here is a fairly complete example:</para>
+            
+            <programlisting><![CDATA[<bean name="StandardSFSBCacheConfig" class="org.jboss.cache.config.Configuration">
+
+   <!--  No transaction manager lookup -->
+         
+   <!-- Name of cluster. Needs to be the same for all members -->
+   <property name="clusterName">
+      ${jboss.partition.name:DefaultPartition}-SFSBCache
+   </property>
+   <!-- Use a UDP (multicast) based stack. Need JGroups flow control (FC)
+        because we are using asynchronous replication. -->
+   <property name="multiplexerStack">${jboss.default.jgroups.stack:udp}</property>
+   <property name="fetchInMemoryState">true</property>
+   
+   <property name="nodeLockingScheme">PESSIMISTIC</property>
+   <property name="isolationLevel">REPEATABLE_READ</property>
+   <property name="cacheMode">REPL_ASYNC</property>
+   
+   <property name="useLockStriping">false</property>
+   
+   <!-- Number of milliseconds to wait until all responses for a
+        synchronous call have been received. Make this longer 
+        than lockAcquisitionTimeout.-->
+   <property name="syncReplTimeout">17500</property>
+   <!-- Max number of milliseconds to wait for a lock acquisition -->
+   <property name="lockAcquisitionTimeout">15000</property>
+   <!-- The max amount of time (in milliseconds) we wait until the
+    state (ie. the contents of the cache) are retrieved from
+    existing members at startup. -->
+   <property name="stateRetrievalTimeout">60000</property>
+
+   <!--
+    SFSBs use region-based marshalling to provide for partial state
+    transfer during deployment/undeployment.
+   -->
+   <property name="useRegionBasedMarshalling">false</property>
+   <!-- Must match the value of "useRegionBasedMarshalling" -->
+   <property name="inactiveOnStartup">false</property>
+   
+   <!-- Disable asynchronous RPC marshalling/sending -->
+   <property name="serializationExecutorPoolSize">0</property>        
+   <!-- We have no asynchronous notification listeners -->
+   <property name="listenerAsyncPoolSize">0</property>
+     
+   <property name="exposeManagementStatistics">true</property>
+
+   <property name="buddyReplicationConfig">
+      <bean class="org.jboss.cache.config.BuddyReplicationConfig">
+         
+         <!--  Just set to true to turn on buddy replication -->
+         <property name="enabled">false</property>
+         
+         <!-- A way to specify a preferred replication group.  We try
+              and pick a buddy who shares the same pool name (falling 
+              back to other buddies if not available). -->
+         <property name="buddyPoolName">default</property>
+         
+         <property name="buddyCommunicationTimeout">17500</property>
+         
+         <!-- Do not change these -->
+         <property name="autoDataGravitation">false</property>
+         <property name="dataGravitationRemoveOnFind">true</property>
+         <property name="dataGravitationSearchBackupTrees">true</property>
+         
+         <property name="buddyLocatorConfig">
+            <bean class="org.jboss.cache.buddyreplication.NextMemberBuddyLocatorConfig">
+               <!-- The number of backup nodes we maintain -->
+               <property name="numBuddies">1</property>
+               <!-- Means that each node will *try* to select a buddy on 
+                    a different physical host. If not able to do so 
+                    though, it will fall back to colocated nodes. -->
+               <property name="ignoreColocatedBuddies">true</property>
+             </bean>
+         </property>
+      </bean>
+   </property>
+   <property name="cacheLoaderConfig">
+      <bean class="org.jboss.cache.config.CacheLoaderConfig">
+             <!-- Do not change these -->
+             <property name="passivation">true</property>
+             <property name="shared">false</property>
+             
+             <property name="individualCacheLoaderConfigs">
+               <list>
+                  <bean class="org.jboss.cache.loader.FileCacheLoaderConfig">
+                     <!-- Where passivated sessions are stored -->
+                     <property name="location">${jboss.server.data.dir}${/}sfsb</property>
+                     <!-- Do not change these -->
+                     <property name="async">false</property>
+                     <property name="fetchPersistentState">true</property>
+                     <property name="purgeOnStartup">true</property>
+                     <property name="ignoreModifications">false</property>
+                     <property name="checkCharacterPortability">false</property>
+                  </bean>
+               </list>
+             </property>
+      </bean>
+   </property>
+  
+   <!-- EJBs use JBoss Cache eviction -->
+   <property name="evictionConfig">
+       <bean class="org.jboss.cache.config.EvictionConfig">
+         <property name="wakeupInterval">5000</property>
+         <!--  Overall default -->
+         <property name="defaultEvictionRegionConfig">
+            <bean class="org.jboss.cache.config.EvictionRegionConfig">
+               <property name="regionName">/</property>
+               <property name="evictionAlgorithmConfig">
+                  <bean class="org.jboss.cache.eviction.NullEvictionAlgorithmConfig"/>
+               </property>
+            </bean>
+         </property>
+         <!-- EJB3 integration code will programatically create
+              other regions as beans are deployed -->
+      </bean>
+   </property>
+</bean>]]></programlisting>
+
+        <para>Basically, the XML specifies the creation of an 
+        <literal>org.jboss.cache.config.Configuration</literal> java bean and
+        the setting of a number of properties on that bean. Most of the
+        properties are of simple types, but some, such as 
+        <literal>buddyReplicationConfig</literal> and <literal>cacheLoaderConfig</literal>
+        take various types java beans as their values.</para>
+        
+        <para>Next we'll look at some of the key configuration options.</para>
+        
+      </section>
+      <section id="jbosscache-configuration-cachemode">
+         <title>Cache Mode</title>
+         
+         <para>JBoss Cache's <literal>cacheMode</literal> configuration attribute 
+         combines into a single property two related aspects:</para>
+         
+         <para><emphasis role="bold">Handling of Cluster Updates</emphasis></para>
+         <para>This controls how a cache instance on one node should notify
+         the rest of the cluster when it makes changes in its local state.
+         There are three options:
+         <itemizedlist>
+            <listitem><para><emphasis role="bold">Synchronous</emphasis> means 
+            the cache instance sends a message to its peers notifying them of the
+            change(s) and before returning waits for them to acknowledge that 
+            they have applied the same changes. If the changes are made as part
+            of a JTA transaction, this is done as part of a 2 phase-commit 
+            process during transaction commit.  Any locks are held until this
+            acknowledgment is received. Waiting for acknowledgement from
+            all nodes adds delays, but it ensures consistency around the cluster.
+            Synchronous mode is needed when all the nodes in the cluster may
+            access the cached data resulting in a high need for consistency.
+            </para></listitem>
+            <listitem><para><emphasis role="bold">Asynchronous</emphasis> means 
+            the cache instance sends a message to its peers notifying them of the
+            change(s) and then immediately returns, without any acknowledgement 
+            that they have applied the same changes. It <emphasis>does not</emphasis>
+            mean sending the message is handled by some other thread besides the 
+            one that changed the cache content; the thread that makes the change
+            still spends some time dealing with sending messages to the cluster,
+            just not as much as with synchronous communication. Asynchronous
+            mode is most useful for cases like session replication, where the
+            cache doing the sending expects to be the only one that accesses the
+            data and the cluster messages are used to provide backup copies in
+            case of failure of the sending node. Asynchronous messaging adds a
+            small risk that a later user request that fails over to another node may
+            see out-of-date state, but for many session-type applications this
+            risk is acceptable given the major performance benefits asynchronous
+            mode has over synchronous mode. 
+            </para></listitem>
+            <listitem><para><emphasis role="bold">Local</emphasis> means 
+            the cache instance doesn't send a message at all.  A JGroups channel
+            isn't even used by the cache. JBoss Cache has
+            many useful features besides its clustering capabilities and is a
+            very useful caching library even when not used in a cluster. Also,
+            even in a cluster, some cached data does not need to be kept consistent
+            around the cluster, in which case Local mode will improve performance.
+            Caching of JPA/Hibernate query result sets is an example of this;
+            Hibernate's second level caching logic uses a separate mechanism to
+            invalidate stale query result sets from the second level cache, so
+            JBoss Cache doesn't need to send messages around the cluster for
+            a query result set cache.
+            </para></listitem>
+         </itemizedlist>
+         </para>
+         
+         <para><emphasis role="bold">Replication vs. Invalidation</emphasis></para>
+         
+         <para>This aspect deals with the content of messages sent around the cluster
+         when a cache changes its local state, i.e. what should the other caches
+         in the cluster do to reflect the change:
+         <itemizedlist>
+         <listitem>
+           <para><emphasis role="bold">Replication</emphasis> means the other nodes
+           should update their state to reflect the new state on the sending
+           node.  This means the sending node needs to include the changed state, 
+           increasing the cost of the message. Replication is necessary if
+           the other nodes have no other way to obtain the state.</para>
+         </listitem>
+         <listitem>
+           <para><emphasis role="bold">Invalidation</emphasis> means the other
+           nodes should remove the changed state from their local state. 
+           Invalidation reduces the cost of the cluster update messages, since
+           only the cache key of the changed state needs to be transmitted, not the
+           state itself.  However, it is only an option if the removed state can be
+           retrieved from another source. It is an excellent option for a 
+           clustered JPA/Hibernate entity cache, since the cached state can
+           be re-read from the database.</para>
+         </listitem>
+         </itemizedlist>
+         </para>
+         
+         <para>These two aspects combine to form 5 valid values for the
+         <literal>cacheMode</literal> configuration attribute:
+         <itemizedlist>
+           <listitem><para><emphasis role="bold">LOCAL</emphasis> means no
+           cluster messages are needed.
+           </para></listitem>
+           <listitem><para><emphasis role="bold">REPL_SYNC</emphasis> means 
+           synchronous replication messages are sent.
+           </para></listitem>
+           <listitem><para><emphasis role="bold">REPL_ASYNC</emphasis> means 
+           asynchronous replication messages are sent.
+           </para></listitem>
+           <listitem><para><emphasis role="bold">INVALIDATION_SYNC</emphasis> means 
+           synchronous invalidation messages are sent.
+           </para></listitem>
+           <listitem><para><emphasis role="bold">INVALIDATION_ASYNC</emphasis> means 
+           asynchronous invalidation messages are sent.
+           </para></listitem>
+         </itemizedlist>
+         </para>
+      </section>
+      
+      <section id="jbosscache-configuration-transactions">
+         <title>Transaction Handling</title>
+         
+         <para>JBoss Cache integrates with JTA transaction managers to allow
+         transactional access to the cache.  When JBoss Cache detects the
+         presence of a transaction, any locks are held for the life
+         of the transaction, changes made to the cache will be reverted if
+         the transaction rolls back, and any cluster-wide messages sent to
+         inform other nodes of changes are deferred and sent in a batch as
+         part of transaction commit (reducing chattiness).</para>
+         
+         <para>Integration with a transaction manager is accomplished by
+         setting the <literal>transactionManagerLookupClass</literal> configuration
+         attribute; this specifies the fully qualified class name of a class JBoss Cache
+         can use to find the local transaction manager. Inside JBoss AS, this
+         attribute would have one of two values:</para>
+         
+         <itemizedlist>
+           <listitem>
+             <para><emphasis role="bold">org.jboss.cache.transaction.JBossTransactionManagerLookup</emphasis></para>
+             <para>This finds the standard transaction manager running in the application server.
+             Use this for any custom caches you deploy where you want caching
+             to participate in any JTA transactions.</para>
+           </listitem>
+           <listitem>
+             <para><emphasis role="bold">org.jboss.cache.transaction.BatchModeTransactionManagerLookup</emphasis></para>
+             <para>This is used in the cache configurations used for web session
+             and EJB SFSB caching.  It specifies a simple mock <literal>TransactionManager</literal> 
+             that ships with JBoss Cache called the <literal>BatchModeTransactionManager</literal>.
+             This transaction manager is not a true JTA transaction manager and
+             should not be used for anything other than JBoss Cache. Its usage
+             in JBoss AS is to get most of the benefits of JBoss Cache's transactional
+             behavior for the session replication use cases, but without getting
+             tangled up with end user transactions that may run during a request.
+             </para>
+           </listitem>
+         </itemizedlist>
+         
+         <note>
+           <para>For caches used for JPA/Hibernate caching, the 
+           <literal>transactionManagerLookupClass</literal> should not be
+           configured.  Hibernate internally configures the cache to use
+           the same transaction manager it is using for database access.</para>
+         </note>
+      </section>
+      
+      <section id="jbosscache-configuration-concurrency">
+         <title>Concurrent Access</title>
+         <para>JBoss Cache is a thread safe caching API, and uses its own efficient 
+         mechanisms of controlling concurrent access. Concurrency is configured
+         via the <literal>nodeLockingScheme</literal> and <literal>isolationLevel</literal>
+         configuration attributes.
+         </para>
+         
+         <para>There are three choices for <literal>nodeLockingScheme</literal>:
+         <itemizedlist>
+         <listitem>
+         <para><emphasis role="bold">MVCC</emphasis> or multi-versioned concurrency 
+         control, is a locking scheme commonly used by modern database implementations 
+         to control fast, safe concurrent access to shared data. JBoss Cache 3.x uses 
+         an innovative implementation of MVCC as the default locking scheme. MVCC 
+         is designed to provide the following features for concurrent access:
+         <itemizedlist>
+         <listitem><para>Readers that don't block writers</para></listitem>
+         <listitem><para>Writers that fail fast</para></listitem>
+         </itemizedlist>
+         It achieves this by using data versioning and copying for concurrent 
+         writers. The theory is that readers continue reading shared state, 
+         while writers copy the shared state, increment a version id, and write 
+         that shared state back after verifying that the version is still valid 
+         (i.e., another concurrent writer has not changed this state first).</para>
+         <para>MVCC is the recommended choice for JPA/Hibernate entity caching.</para>
+         </listitem>
+         <listitem>
+            <para><emphasis role="bold">PESSIMISTIC</emphasis> locking involves
+            threads/transactions acquiring either exclusive or non-exclusive
+            locks on nodes before reading or writing. Which is acquired
+            depends on the <literal>isolationLevel</literal> (see below) but
+            in most cases a non-exclusive lock is acquired for a read and an
+            exclusive lock is acquired for a write. Pessimistic locking
+            requires considerably more overhead than MVCC and allows lesser concurrency,
+            since reader threads must block until a write has completed and 
+            released its exclusive lock (potentially a long time if the write 
+            is part of a transaction). A write will also be delayed due to ongoing
+            reads.</para>
+            <para>Generally MVCC is a better choice than PESSIMISTIC, which is
+            deprecated as of JBoss Cache 3.0. But, for the session caching usage 
+            in JBoss AS 5.0.0, PESSIMISTIC is still the default. This is largely 
+            because 1) for the session use case there are generally not concurrent 
+            threads accessing the same cache location, so the benefits of MVCC 
+            are not as great, and 2) the AS development team wanted to continue 
+            to evaluate MVCC in the session use case before moving to it as the default.</para>
+         </listitem>
+         <listitem>
+            <para><emphasis role="bold">OPTIMISTIC</emphasis> locking seeks to
+            improve upon the concurrency available with PESSIMISTIC by creating
+            a "workspace" for each request/transaction that accesses the cache. 
+            Data accessed by the request/transaction (even reads) is <emphasis>copied</emphasis> 
+            into the workspace, which is adds overhead. All data is versioned;
+            on completion of non-transactional requests or commits of transactions
+            the version of data in the workspace is compared to the main cache,
+            and an exception is raised if there are are inconsistencies. Otherwise
+            changes to the workspace are applied to the main cache.</para>
+            <para>OPTIMISTIC locking is deprecated but is still provided to
+            support backward compatibility. Users are encouraged to use MVCC 
+            instead, which provides the same benefits at lower cost.</para>
+         </listitem>
+         </itemizedlist>
+         </para>
+         
+         <para>The <literal>isolationLevel</literal> attribute has two possible
+         values <emphasis role="bold">READ_COMMITTED</emphasis> and 
+         <emphasis role="bold">REPEATABLE_READ</emphasis> which correspond in 
+         semantic to database-style isolation levels. Previous versions of JBoss 
+         Cache supported all 5 database isolation levels, and if an unsupported 
+         isolation level is configured, it is either upgraded or downgraded to 
+         the closest supported level. 
+         </para>
+         
+         <para>REPEATABLE_READ is the default isolation level, to maintain 
+         compatibility with previous versions of JBoss Cache. READ_COMMITTED, 
+         while providing a slightly weaker isolation, has a significant performance 
+         benefit over REPEATABLE_READ.</para>
+      </section>
+      
+      <section id="jbosscache-configuration-jgroups">
+         <title>JGroups Integration</title>
+         
+         <para>Each JBoss Cache instance internally uses a JGroups <literal>Channel</literal>
+         to handle group communications. Inside JBoss AS, we strongly recommend 
+         that you use the AS's JGroups Channel Factory service (see 
+         <xref linkend="clustering-blocks-jgroups-channelfactory"/>) as the 
+         source for your cache's <literal>Channel</literal>. In this section
+         we discuss how to configure your cache to get it's channel from
+         the Channel Factory; if you wish to configure the channel in some
+         other way see the JBoss Cache documentation.</para>
+         
+         <para><emphasis role="bold">Caches obtained from the CacheManager Service</emphasis></para>
+         
+         <para>This is the simplest approach. The CacheManager service already has
+         a reference to the Channel Factory service, so the only configuration
+         task is to configure the name of the JGroups protocol stack configuration
+         to use.</para>
+         
+         <para>If you are configuring your cache via the CacheManager service's
+         <literal>jboss-cache-manager-jboss-beans.xml</literal> 
+         file (see <xref linkend="jbosscache-custom-deployment-cachemgr"/>), 
+         add the following to your cache configuration, where the value is the 
+         name of the protocol stack configuration.:</para>
+         
+         <programlisting><![CDATA[<property name="multiplexerStack">udp</property>]]></programlisting>
+         
+         <!-- 
+         <para>If you are using the CacheManager service's <literal>jboss-cache-configs.xml</literal>
+         file  to configure your cache using the JBoss Cache 3 schema 
+         (see <xref linkend="jbosscache-custom-deployment-cachemgr-cacheconfigs"/>), 
+         you add the following to your cache configuration:</para>
+         
+         <programlisting><![CDATA[<jgroupsConfig multiplexerStack="udp"/>]]></programlisting>
+         -->
+         
+         <para><emphasis role="bold">Caches Deployed via a <literal>-jboss-beans.xml</literal> File</emphasis></para>
+         
+         <para>If you are deploying a cache via a JBoss Microcontainer 
+         <literal>-jboss-beans.xml</literal> file (see 
+         <xref linkend="jbosscache-custom-deployment-beans.xml"/>), you need
+         inject a reference to the Channel Factory service as well as specifying
+         the protocol stack configuration:</para>
+         
+         <programlisting><![CDATA[<property name="runtimeConfig">
+   <bean class="org.jboss.cache.config.RuntimeConfig">
+      <property name="muxChannelFactory"><inject bean="JChannelFactory"/></property>
+   </bean>
+</property>
+<property name="multiplexerStack">udp</property>]]></programlisting>
+         
+         <para><emphasis role="bold">Caches Deployed via a <literal>-service.xml</literal> File</emphasis></para>
+         
+         <para>If you are deploying a cache MBean via <literal>-service.xml</literal> 
+         file (see <xref linkend="jbosscache-custom-deployment-service.xml"/>),
+         <literal>CacheJmxWrapper</literal> is the class of your MBean; that 
+         class exposes a <literal>MuxChannelFactory</literal> MBean attribute. 
+         You dependency inject the Channel Factory service into
+         this attribute, and set the protocol stack name via the <literal>MultiplexerStack</literal>
+         attribute:</para>
+         
+         <programlisting><![CDATA[<attribute name="MuxChannelFactory"><inject bean="JChannelFactory"/></attribute>
+<attribute name="MultiplexerStack">udp</attribute>]]></programlisting>
+      </section>
+      
+      <section id="jbosscache-configuration-eviction">
+         <title>Eviction</title>
+         
+         <para>Eviction allows the cache to control memory by removing data
+         (typically the least frequently used data). If you wish to configure
+         eviction for a custom cache, see the JBoss Cache documentation for
+         all of the available options. For details on configuring it for
+         JPA/Hibernate caching, see the Eviction chapter in the "Using JBoss Cache 
+         as a Hibernate Second Level Cache" guide at 
+         http://www.jboss.org/jbossclustering/docs/hibernate-jbosscache-guide-3.pdf.
+         For web session caches, eviction should not be configured; the
+         distributable session manager handles eviction itself. For EJB 3
+         SFSB caches, stick with the eviction configuration in the AS's standard
+         <literal>sfsb-cache</literal> configuration (see 
+         <xref linkend="clustering-blocks-jbc-cachemanager"/>). The EJB container
+         will configure eviction itself using the values included in each bean's
+         configuration.    
+         </para>
+      </section>
+      
+      <section id="jbosscache-configuration-cacheloaders">
+         <title>Cache Loaders</title>
+         
+         <para>Cache loading allows JBoss Cache to store data in a persistent
+         store in addition to what it keeps in memory. This data can either be
+         an overflow, where the data in the persistent store is not reflected
+         in memory. Or it can be a superset of what is in memory, where everything
+         in memory is also reflected in the persistent store, along with items
+         that have been evicted from memory. Which of these two modes is used
+         depends on the setting of the <literal>passivation</literal> flag in 
+         the JBoss Cache cache loader configuration section. A <literal>true</literal>
+         value means the persistent store acts as an overflow area written to when
+         data is evicted from the in-memory cache.</para>
+         
+         <para>If you wish to configure cache loading for a custom cache, see 
+         the JBoss Cache documentation for all of the available options. Do not
+         configure cache loading for a JPA/Hibernate cache, as the database
+         itself serves as a persistent store; adding a cache loader is just
+         redundant.</para>
+         
+         <para>The caches used for web session and EJB3 SFSB caching use
+         passivation. Next we'll discuss the cache loader configuration for
+         those caches in some detail.</para>
+         
+         <section id="jbosscache-configuration-cacheloaders-session">
+           <title>CacheLoader Configuration for Web Session and SFSB Caches</title>
+           
+           <para>HttpSession and SFSB passivation rely on JBoss Cache's 
+           Cache Loader passivation for storing and retrieving the passivated 
+           sessions. Therefore the cache instance used by your webapp's clustered 
+           session manager or your bean's EJB container must be configured to enable 
+           Cache Loader passivaton.</para>
+           <para>In most cases you don't need to do anything to alter the cache
+           loader configurations for the standard web session and SFSB caches; 
+           the standard JBoss AS configurations should suit your needs.  The 
+           following is a bit more detail in case you're interested or want to 
+           change from the defaults.</para>
+           
+           <para>The Cache Loader configuration for the 
+           <literal>standard-session-cache</literal> config serves as a good
+           example:</para>
+           
+           <programlisting><![CDATA[<property name="cacheLoaderConfig">
+   <bean class="org.jboss.cache.config.CacheLoaderConfig">
+          <!-- Do not change these -->
+          <property name="passivation">true</property>
+          <property name="shared">false</property>
+          
+          <property name="individualCacheLoaderConfigs">
+            <list>
+               <bean class="org.jboss.cache.loader.FileCacheLoaderConfig">
+                  <!-- Where passivated sessions are stored -->
+                  <property name="location">${jboss.server.data.dir}${/}field-session</property>
+                  <!-- Do not change these -->
+                  <property name="async">false</property>
+                  <property name="fetchPersistentState">true</property>
+                  <property name="purgeOnStartup">true</property>
+                  <property name="ignoreModifications">false</property>
+                  <property name="checkCharacterPortability">false</property>
+               </bean>
+            </list>
+          </property>
+   </bean>
+</property>]]></programlisting>
+
+         <para>Some explanation:</para>
+         
+         <itemizedlist>
+         <listitem><para><emphasis role="bold">passivation</emphasis> property
+         MUST be <literal>true</literal></para></listitem>
+         <listitem><para><emphasis role="bold">shared</emphasis> property MUST be 
+         <literal>false</literal>. Do not passivate sessions to a shared persistent 
+         store, otherwise if another node activates the session, it will be gone 
+         from the persistent store and also gone from memory on other nodes that 
+         have passivated it. Backup copies will be lost.</para></listitem>
+         <listitem><para><emphasis role="bold">individualCacheLoaderConfigs</emphasis> 
+         property accepts a list of Cache Loader configurations. JBC allows you 
+         to chain cache loaders; see the JBoss Cache docs. For the session passivation 
+         use case a single cache loader is sufficient.</para></listitem>
+         <listitem><para><emphasis role="bold">class</emphasis> attribute on a 
+         cache loader config bean must refer to the configuration class for a 
+         cache loader implementation (e.g. <literal>org.jboss.cache.loader.FileCacheLoaderConfig</literal> 
+         or <literal>org.jboss.cache.loader.JDBCCacheLoaderConfig</literal>). See 
+         the JBoss Cache documentation for more on the available CacheLoader 
+         implementations. If you wish to use JDBCCacheLoader (to persist to a 
+         database rather than the filesystem used by FileCacheLoader) note the 
+         comment above about the <literal>shared</literal> property.  Don't use 
+         a shared database, or at least not a shared table in the database.  Each 
+         node in the cluster must have its own storage location.</para></listitem>
+         <listitem><para><emphasis role="bold">location</emphasis> property for 
+         FileCacheLoaderConfig defines the root node of the filesystem tree where 
+         passivated sessions should be stored. The default is to store them in 
+         your JBoss AS configuration's <literal>data</literal> directory.</para></listitem>
+         <listitem><para><emphasis role="bold">async</emphasis> MUST be 
+         <literal>false</literal> to ensure passivated sessions are promptly 
+         written to the persistent store.</para></listitem>
+         <listitem><para><emphasis role="bold">fetchPersistentState</emphasis> 
+         property MUST be <literal>true</literal> to ensure passivated sessions 
+         are included in the set of session backup copies transferred over from 
+         other nodes when the cache starts.</para></listitem>
+         <listitem><para><emphasis role="bold">purgeOnStartup</emphasis> should 
+         be <literal>true</literal> to ensure out-of-date session data left over 
+         from a previous shutdown of a server doesn't pollute the current data 
+         set.</para></listitem>
+         <listitem><para><emphasis role="bold">ignoreModifications</emphasis> 
+         should be <literal>false</literal></para></listitem>
+         <listitem><para><emphasis role="bold">checkCharacterPortability</emphasis> 
+         should be <literal>false</literal> as a minor performance optimization.</para>
+         </listitem>
+         </itemizedlist>
+         </section>
+         
+      </section>
+      
+      <section id="jbosscache-configuration-buddyrepl">
+         <title>Buddy Replication</title>
+         <para>Buddy Replication is a JBoss Cache feature that allows you to 
+         suppress replicating your data to all instances in a cluster. Instead, 
+         each instance picks one or more 'buddies' in the cluster, and only 
+         replicates to those specific buddies. This greatly helps scalability 
+         as there is no longer a memory and network traffic impact every time 
+         another instance is added to a cluster.</para> 
+         
+         <para>If the cache on another node needs data that it doesn't have 
+         locally, it can ask the other nodes in the cluster to provide it; 
+         nodes that have a copy will provide it as part of a process called 
+         "data gravitation". The new node will become the owner of the data, 
+         placing a backup copy of the data on its buddies. The ability to 
+         gravitate data means there is no need for all requests for data to 
+         occur on a node that has a copy of it; any node
+         can handle a request for any data.  However, data gravitation is 
+         expensive and should not be a frequent occurence; ideally it should 
+         only occur if the node that is using some data fails or is shut down,
+         forcing interested clients to fail over to a different node. This
+         makes buddy replication primarily useful for session-type applications
+         with session affinity (a.k.a. "sticky sessions") where all requests
+         for a particular session are normally handled by a single server.</para>
+         
+         <para>Buddy replication can be enabled for the web session and
+         EJB3 SFSB caches. Do not add buddy replication to the cache configurations
+         used for other standard clustering services (e.g. JPA/Hibernate
+         caching).  Services not specifically engineered for buddy replication
+         are highly unlikely to work correctly if it is introduced.</para>
+         
+         <para>Configuring buddy replication is fairly straightforward. As
+         an example we'll look at the buddy replication configuration section
+         from the CacheManager service's <literal>standard-session-cache</literal>
+         config:</para>
+         <programlisting><![CDATA[<property name="buddyReplicationConfig">
+   <bean class="org.jboss.cache.config.BuddyReplicationConfig">
+               
+      <!--  Just set to true to turn on buddy replication -->
+      <property name="enabled">true</property>
+               
+      <!-- A way to specify a preferred replication group.  We try
+           and pick a buddy who shares the same pool name (falling 
+           back to other buddies if not available). -->
+      <property name="buddyPoolName">default</property>
+               
+      <property name="buddyCommunicationTimeout">17500</property>
+               
+      <!-- Do not change these -->
+      <property name="autoDataGravitation">false</property>
+      <property name="dataGravitationRemoveOnFind">true</property>
+      <property name="dataGravitationSearchBackupTrees">true</property>
+               
+      <property name="buddyLocatorConfig">
+         <bean class="org.jboss.cache.buddyreplication.NextMemberBuddyLocatorConfig">
+            <!-- The number of backup copies we maintain -->
+            <property name="numBuddies">1</property>
+            <!-- Means that each node will *try* to select a buddy on 
+                 a different physical host. If not able to do so 
+                 though, it will fall back to colocated nodes. -->
+            <property name="ignoreColocatedBuddies">true</property>
+          </bean>
+      </property>
+   </bean>
+</property>]]></programlisting>
+
+         <para>The main things you would be likely to configure are:</para>
+         
+         <itemizedlist>
+         <listitem><para><emphasis role="bold">buddyReplicationEnabled</emphasis> 
+         -- <literal>true</literal> if you want buddy replication; <literal>false</literal>
+         if data should be replicated to all nodes in the cluster, in which case
+         none of the other buddy replication configurations matter.</para>
+         </listitem>
+         <listitem><para><emphasis role="bold">numBuddies</emphasis> 
+         -- to how many backup nodes should each node replicate its state.</para>
+         </listitem>
+         <listitem><para><emphasis role="bold">buddyPoolName</emphasis> 
+         -- allows logical subgrouping of nodes within the cluster; if possible, 
+         buddies will be chosen from nodes in the same buddy pool.</para>
+         </listitem>
+         </itemizedlist>
+         
+         <para>The <literal>ignoreColocatedBuddies</literal> switch means that 
+         when the cache is trying to find a buddy, it will if possible not choose 
+         a buddy on the same physical host as itself. If the only server it can 
+         find is running on its own machine, it will use that server as a buddy.</para>
+         
+         <para>Do not change the settings for <literal>autoDataGravitation</literal>, 
+         <literal>dataGravitationRemoveOnFind</literal> and 
+         <literal>dataGravitationSearchBackupTrees</literal>.  Session replication 
+         will not work properly if these are changed.</para>
+      </section>
+      
+    </section>
+    
+    <section id="jbosscache-custom-deployment">
+     <title>Deploying Your Own JBoss Cache Instance</title>
+     
+     <para>It's quite common for users to deploy their own instances of
+     JBoss Cache inside JBoss AS for custom use by their applications.
+     In this section we describe the various ways caches can be
+     deployed.</para>
+     
+     <section id="jbosscache-custom-deployment-cachemgr">
+       <title>Deployment Via the CacheManager Service</title>
+       
+       <para>The standard JBoss clustered services that use JBoss Cache
+       obtain a reference to their cache from the AS's CacheManager service
+       (see <xref linkend="clustering-blocks-jbc-cachemanager"/>). End
+       user applications can do the same thing; here's how.</para>
+       
+       <para><xref linkend="jbosscache-configuration-cachemanager"/> shows
+       the configuration of the CacheManager's "CacheConfigurationRegistry" bean.
+       To add a new configuration, you would add an additional element inside 
+       that bean's <literal>newConfigurations</literal> &lt;map&gt;:</para>
+       
+       <programlisting><![CDATA[<bean name="CacheConfigurationRegistry" 
+      class="org.jboss.ha.cachemanager.DependencyInjectedConfigurationRegistry">
+   .....
+   <property name="newConfigurations">
+     <map keyClass="java.lang.String" valueClass="org.jboss.cache.config.Configuration">
+                  
+       <entry><key>my-custom-cache</key>
+         <value>          
+           <bean name="MyCustomCacheConfig" class="org.jboss.cache.config.Configuration">              
+             .... details of the my-custom-cache configuration
+           </bean> 
+          </value>
+       </entry>				
+       .....
+]]></programlisting>
+       
+       <para>See <xref linkend="jbosscache-configuration-cachemanager"/>
+       for an example configuration.</para>
+              
+       <!-- <section id="jbosscache-custom-deployment-cachemgr-cacheconfigs">
+	       <title>Using <literal>jboss-cache-configs.xml</literal></title>
+	       <para></para>
+       </section>-->
+       
+       <section>
+          <title>Accessing the CacheManager</title>
+          <para>Once you've added your cache configuration to the CacheManager,
+          the next step is to provide a reference to the CacheManager to your
+          application.  There are three ways to do this:</para>
+          
+          <itemizedlist>
+             <listitem><para><emphasis role="bold">Dependency Injection</emphasis></para>
+             <para>If your application uses the JBoss Microcontainer for configuration,
+             the simplest mechanism is to have it inject the CacheManager into
+             your service.</para>
+             
+             <programlisting><![CDATA[<bean name="MyService" class="com.example.MyService">
+   <property name="cacheManager"><inject bean="CacheManager"/></property>
+</bean>]]></programlisting>
+             </listitem>
+             <listitem><para><emphasis role="bold">JNDI Lookup</emphasis></para>
+             <para>Alternatively, you can find look up the CacheManger is
+             JNDI. It is bound under <literal>java:CacheManager</literal>.</para>
+             
+             <programlisting><![CDATA[import org.jboss.ha.cachemanager.CacheManager;
+
+public class MyService {
+   private CacheManager cacheManager;
+   
+   public void start() throws Exception {
+       Context ctx = new InitialContext();
+       cacheManager = (CacheManager) ctx.lookup("java:CacheManager");
+   }
+}]]></programlisting>
+             </listitem>
+             <listitem><para><emphasis role="bold">CacheManagerLocator</emphasis></para>
+             <para>JBoss AS also provides a service locator object that can 
+             be used to access the CacheManager.</para>
+             
+             <programlisting><![CDATA[import org.jboss.ha.cachemanager.CacheManager;
+import org.jboss.ha.framework.server.CacheManagerLocator;
+
+public class MyService {
+   private CacheManager cacheManager;
+   
+   public void start() throws Exception {
+       CacheManagerLocator locator = CacheManagerLocator.getCacheManagerLocator();
+       // Locator accepts as param a set of JNDI properties to help in lookup;
+       // this isn't necessary inside the AS
+       cacheManager = locator.getCacheManager(null);
+   }
+}]]></programlisting>
+             </listitem>
+          </itemizedlist>
+          
+          <para>Once a reference to the CacheManager is obtained; usage is simple.
+          Access a cache by passing in the name of the desired configuration.
+          The CacheManager will not start the cache; this is the responsibility
+          of the application. The cache may, however, have been started by
+          another application running in the cache server; the cache may be
+          shared.  When the application is done using the cache, it should not 
+          stop.  Just inform the CacheManager that the cache is no longer being 
+          used; the manager will stop the cache when all callers that have asked
+          for the cache have released it.</para>
+             
+             <programlisting><![CDATA[import org.jboss.cache.Cache;
+import org.jboss.ha.cachemanager.CacheManager;
+import org.jboss.ha.framework.server.CacheManagerLocator;
+
+public class MyService {
+   private CacheManager cacheManager;
+   private Cache cache;
+   
+   public void start() throws Exception {
+       Context ctx = new InitialContext();
+       cacheManager = (CacheManager) ctx.lookup("java:CacheManager");
+       
+       // "true" param tells the manager to instantiate the cache if
+       // it doesn't exist yet
+       cache = cacheManager.getCache("my-cache-config", true);
+       
+       cache.start();
+   }
+   
+   public void stop() throws Exception {
+       cacheManager.releaseCache("my-cache-config");
+   }
+}]]></programlisting>
+          
+          <para>The CacheManager can also be used to access instances of
+          POJO Cache.</para>
+             
+             <programlisting><![CDATA[import org.jboss.cache.pojo.PojoCache;
+import org.jboss.ha.cachemanager.CacheManager;
+import org.jboss.ha.framework.server.CacheManagerLocator;
+
+public class MyService {
+   private CacheManager cacheManager;
+   private PojoCache pojoCache;
+   
+   public void start() throws Exception {
+       Context ctx = new InitialContext();
+       cacheManager = (CacheManager) ctx.lookup("java:CacheManager");
+       
+       // "true" param tells the manager to instantiate the cache if
+       // it doesn't exist yet
+       pojoCache = cacheManager.getPojoCache("my-cache-config", true);
+       
+       pojoCache.start();
+   }
+   
+   public void stop() throws Exception {
+       cacheManager.releasePojoCache("my-cache-config");
+   }
+}]]></programlisting>
+          
+       </section>
+     </section>
+     
+     <section id="jbosscache-custom-deployment-service.xml">
+       <title>Deployment Via a <literal>-service.xml</literal> File</title>
+       
+       <para>As in JBoss 4, you can also deploy a JBoss Cache instance as
+       an MBean service via a <literal>-service.xml</literal> file.
+       The primary difference from JBoss 4 is the value of the <literal>code</literal>
+       attribute in the <literal>mbean</literal> element. In JBoss 4, this
+       was <literal>org.jboss.cache.TreeCache</literal>; in JBoss 5 it is
+       <literal>org.jboss.cache.jmx.CacheJmxWrapper</literal>. Here's an
+       example:</para>
+       
+       <programlisting><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+
+<server>
+  <mbean code="org.jboss.cache.jmx.CacheJmxWrapper" 
+         name="foo:service=ExampleCacheJmxWrapper">
+      
+     <attribute name="TransactionManagerLookupClass">
+       org.jboss.cache.transaction.JBossTransactionManagerLookup
+     </attribute>
+     
+     <attribute name="MuxChannelFactory"><inject bean="JChannelFactory"/></attribute>
+     
+     <attribute name="MultiplexerStack">udp</attribute>
+     <attribute name="ClusterName">Example-EntityCache</attribute>        
+     <attribute name="IsolationLevel">REPEATABLE_READ</attribute>
+     <attribute name="CacheMode">REPL_SYNC</attribute>
+     <attribute name="InitialStateRetrievalTimeout">15000</attribute>
+     <attribute name="SyncReplTimeout">20000</attribute>
+     <attribute name="LockAcquisitionTimeout">15000</attribute>
+     <attribute name="ExposeManagementStatistics">true</attribute>
+         
+  </mbean>
+</server>]]></programlisting>
+       
+       <para>The <literal>CacheJmxWrapper</literal> is not the cache itself (i.e.
+       you can't store stuff in it). Rather, as it's name implies, it's
+       a wrapper around an <literal>org.jboss.cache.Cache</literal> that 
+       handles integration with JMX. <literal>CacheJmxWrapper</literal> exposes
+       the <literal>org.jboss.cache.Cache</literal> via its <literal>CacheJmxWrapperMBean</literal>
+       MBean interfaces <literal>Cache</literal> attribute; services that need 
+       the cache can obtain a reference to it via that attribute.</para>       
+     </section>
+     
+     <section id="jbosscache-custom-deployment-beans.xml">
+       <title>Deployment Via a <literal>-jboss-beans.xml</literal> File</title>
+       
+       <para>Much like it can deploy MBean services described with a
+       <literal>-service.xml</literal>, JBoss AS 5 can also deploy services
+       that consist of Plain Old Java Objects (POJOs) if the POJOs are described
+       using the JBoss Microcontainer schema in a <literal>-jboss-beans.xml</literal>
+       file. You create such a file and deploy it, either directly in the
+       <literal>deploy</literal> dir, or packaged in an ear or sar. Following
+       is an example:</para>
+       
+       <programlisting><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+
+<deployment xmlns="urn:jboss:bean-deployer:2.0">
+
+  <!-- First we create a Configuration object for the cache -->
+  <bean name="ExampleCacheConfig"
+        class="org.jboss.cache.config.Configuration">
+
+    <!-- Externally injected services -->  
+    <property name="runtimeConfig">
+      <bean name="ExampleCacheRuntimeConfig" 
+            class="org.jboss.cache.config.RuntimeConfig">
+        <property name="transactionManager">
+          <inject bean="jboss:service=TransactionManager" 
+                  property="TransactionManager"/>
+        </property>
+        <property name="muxChannelFactory"><inject bean="JChannelFactory"/></property>
+      </bean>
+    </property>
+      
+    <property name="multiplexerStack">udp</property>
+    <property name="clusterName">Example-EntityCache</property>        
+    <property name="isolationLevel">REPEATABLE_READ</property>
+    <property name="cacheMode">REPL_SYNC</property>
+    <property name="initialStateRetrievalTimeout">15000</property>
+    <property name="syncReplTimeout">20000</property>
+    <property name="lockAcquisitionTimeout">15000</property>
+    <property name="exposeManagementStatistics">true</property>
+
+  </bean>
+ 
+  <!-- Factory to build the Cache. -->
+  <bean name="DefaultCacheFactory" class="org.jboss.cache.DefaultCacheFactory">      
+    <constructor factoryClass="org.jboss.cache.DefaultCacheFactory" />
+  </bean>
+  
+  <!-- The cache itself -->
+  <bean name="ExampleCache" class="org.jboss.cache.Cache">
+    <constructor factoryMethod="createCache">
+      <factory bean="DefaultCacheFactory"/>
+      <parameter class="org.jboss.cache.config.Configuration">
+        <inject bean="ExampleCacheConfig"/>
+      </parameter>
+      <parameter class="boolean">false</false>
+    </constructor>
+  </bean>
+   
+  <bean name="ExampleService" class="org.foo.ExampleService">
+    <property name="cache"><inject bean="ExampleCache"/></property>
+  </bean>
+
+</deployment>]]></programlisting>
+
+       <para>The bulk of the above is the creation of a JBoss Cache 
+       <literal>Configuration</literal> object; this is the same as what we
+       saw in the configuration of the CacheManager service 
+       (see <xref linkend="jbosscache-configuration-cachemanager"/>). In this
+       case we're not using the CacheManager service as a cache factory, so
+       instead we create our own factory bean and then use it to create
+       the cache (the "ExampleCache" bean).  The "ExampleCache" is then
+       injected into a (fictitious) service that needs it.</para>
+       
+       <para>An interesting thing to note in the above example is the use of the 
+       <literal>RuntimeConfig</literal> object. External resources like a 
+       <literal>TransactionManager</literal> and a JGroups <literal>ChannelFactory</literal> 
+       that are visible to the microcontainer are dependency injected into the 
+       <literal>RuntimeConfig</literal>. The assumption here is that in some 
+       other deployment descriptor in the AS, the referenced beans have already 
+       been described.</para>
+       
+       <para>Using the configuration above, the "ExampleCache" cache will not
+       be visible in JMX. Here's an alternate approach that results in
+       the cache being bound into JMX:</para>
+       
+       <programlisting><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+
+<deployment xmlns="urn:jboss:bean-deployer:2.0">
+
+  <!-- First we create a Configuration object for the cache -->
+  <bean name="ExampleCacheConfig"
+        class="org.jboss.cache.config.Configuration">
+
+      .... same as above
+
+  </bean>
+ 
+  <bean name="ExampleCacheJmxWrapper" class="org.jboss.cache.jmx.CacheJmxWrapper">
+         
+    <annotation>@org.jboss.aop.microcontainer.aspects.jmx.JMX(
+          name="foo:service=ExampleCacheJmxWrapper",
+          exposedInterface=org.jboss.cache.jmx.CacheJmxWrapperMBean.class, 
+          registerDirectly=true)
+    </annotation>
+      
+    <property name="configuration"><inject bean="ExampleCacheConfig"/></property>
+      
+  </bean>
+   
+  <bean name="ExampleService" class="org.foo.ExampleService">
+    <property name="cache"><inject bean="ExampleCacheJmxWrapper" property="cache"/></property>
+  </bean>
+
+</deployment>]]></programlisting>
+     
+     <para>Here the "ExampleCacheJmxWrapper" bean handles the task of creating
+     the cache from the configuration. <literal>CacheJmxWrapper</literal> is
+     a JBoss Cache class that provides an MBean interface for a cache.
+     Adding an &lt;annotation&gt; element binds the JBoss Microcontainer
+     <literal>@JMX</literal> annotation to the bean; that in turn results
+     in JBoss AS registering the bean in JMX as part of the deployment process.
+     </para>
+     
+     <para>The actual underlying <literal>org.jboss.cache.Cache</literal> instance
+     is available from the <literal>CacheJmxWrapper</literal> via its
+     <literal>cache</literal> property; the example shows how this
+     can be used to inject the cache into the "ExampleService".</para>
+     </section>
+     
+    </section>
+
+  </chapter>

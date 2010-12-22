@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE book PUBLIC "-//OASIS//DTD DocBook XML V4.3//EN" "http://www.oasis-open.org/docbook/xml/4.3/docbookx.dtd">
+<book>
+  
+<xi:include href="Book_Info.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+<part id="Security_Overview">
+   <title>Security Overview</title>
+   <partintro>
+      <para>
+        Security is a fundamental part of any enterprise application. You need to be able to restrict who is allowed to access your applications and control what operations application users may perform.
+      </para>
+      <para>
+         The <emphasis>Java Enterprise Edition</emphasis> (J2EE) specification defines a simple role-based security model for <emphasis>Enterprise Java Beans</emphasis> (EJBs) and web components. The                 <emphasis>JBoss Security Extension</emphasis> (JBossSX) framework handles platform security, and provides support for both the role-based declarative J2EE security model and integration of custom            security through a security proxy layer.
+      </para>
+      <para>
+        The default implementation of the declarative security model is based on <emphasis>Java Authentication and Authorization Service</emphasis> (JAAS) login modules and subjects. The security proxy layer        allows custom security that cannot be described using the declarative model to be added to an EJB in a way that is independent of the EJB business object.
+      </para>
+   </partintro>
+   <xi:include href="Security_Guide-Overview.xml" encoding="UTF-8" xmlns:xi="http://www.w3.org/2001/XInclude" />
+   <xi:include href="Security_Guide-Introduction_to_JAAS.xml" encoding="UTF-8" xmlns:xi="http://www.w3.org/2001/XInclude" />
+   <xi:include href="Security_Guide-JBoss_Security_Model.xml" encoding="UTF-8" xmlns:xi="http://www.w3.org/2001/XInclude" />
+   <xi:include href="Security_Guide-JBossSX_Architecture.xml" encoding="UTF-8" xmlns:xi="http://www.w3.org/2001/XInclude" />
+</part>
+
+<part id="Security_Domains_and_Components">
+  <title>Security Domains and Components</title>
+  <xi:include href="Security_Guide-Static_Security_Domains.xml" encoding="UTF-8" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="Security_Guide-Loading_Static_Security_Domains.xml" encoding="UTF-8" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="Security_Guide-Dynamic_Security_Domains.xml" encoding="UTF-8" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="Security_Guide-Authorization_Stacks.xml" encoding="UTF-8" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="Security_Guide-Deployment-level_Role_Mapping.xml" encoding="UTF-8" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="Security_Guide-JBoss_Login_Modules.xml" encoding="UTF-8" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+</part>
+
+<part id="Encryption_and_Security">
+  <title>Encryption and Security</title>
+  <xi:include href="chap-Java_EE_Security_Manager.xml" encoding="UTF-8" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="chap-Secure_Socket_Layer.xml" encoding="UTF-8" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="chap-Masking_Passwords.xml" encoding="UTF-8" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="chap-Overridding_SSL_Configuration.xml" encoding="UTF-8" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="chap-Encrypting_DataSource_Passwords.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="chap-Encrypting_Keystore_Password_in_Tomcat_Connector.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="chap-Using_LdapExtLoginModule.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="chap-Firewalls.xml" encoding="UTF-8" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="chap-Secure_Remote_Password_Protocol.xml" encoding="UTF-8" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="chap-Consoles_And_Invokers.xml" encoding="UTF-8" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+</part>
+
+</book>

@@ -1,0 +1,192 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd">
+
+   <chapter id="Authorization_Stacks">
+      <title>Authorization Stacks</title>
+      <para>
+         If a security domain does not define an authorization module, the default <parameter>jboss-web-policy</parameter> and <parameter>jboss-ejb-policy</parameter> authorization configured in                      <filename>security-policies-jboss-beans.xml</filename> is used. If you specify an authorization module, or create a custom deployment descriptor file with valid authorization configuration, these            settings override the default settings in <filename>security-policies-jboss-beans.xml</filename>.
+      </para>
+
+      <para>
+         Overriding the default authorization for EJB or Web components is provided for JACC and XACML, apart from the default modules that implement the specification behavior. Users can provide                     authorization modules that implement custom behavior. Configuring this functionality allows access control stacks to be pluggable for a particular component, overriding the default authorization             contained in <filename>jboss.xml</filename> (for EJBs) and <filename>jboss-web.xml</filename> (for WAR).
+      </para>
+
+      <formalpara>
+         <title>Setting authorization for all EJB and WEB components</title>
+         <para>
+            You can override authorization for all EJBs and Web components, or for a particular component.
+         </para>
+      </formalpara>
+
+      <procedure id="proc-Set_Auth_Policies_For_All_EJB_WAR_Components">
+         <title>Set authorization policies for all EJB and WAR components</title>
+         <para>
+            This procedure describes how to define JACC Authorization control for all EJB and WAR components. The example defines application policy modules for Web and EJB applications:                                 <filename>jboss-web-policy</filename>, and <filename>jboss-ejb-policy</filename>.
+         </para>
+
+         <step>
+            <title>Open the security policy bean</title>
+            <para>
+               Navigate to <filename>$JBOSS_HOME/server/$PROFILE/deploy/security</filename>
+            </para>
+
+            <para>
+               Open the <filename>security-policies-jboss-beans.xml</filename> file.
+            </para>
+
+            <para>
+               By default, the security-policies-jboss-beans.xml file contains the configuration in <xref linkend="exam-security_policies_default_configuration"/>
+            </para>
+
+            <example id="exam-security_policies_default_configuration">
+               <title>security-policies default configuration</title>
+               <programlisting language="XML" role="XML"><xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="extras/security-policies-jboss-beans_default.xml_sample" parse="text"/>
+               </programlisting>
+            </example>
+         </step>
+
+         <step>
+            <title>Change the application-policy definitions</title>
+            <para>
+               To set a single authorization policy for each component using JACC, amend each <sgmltag>&lt;policy-module&gt;</sgmltag> <parameter>code</parameter> attribute with the name of the JACC                        authorization module.
+            </para>
+
+            <programlisting language="XML" role="XML"><xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="extras/security-policies-jboss-beans_all_ejb_war.xml_sample" parse="text"/>
+            </programlisting>
+         </step>
+
+         <step>
+            <title>Restart server</title>
+            <para>
+               You have now configured the <filename>security-policy-jboss-beans.xml</filename> file with JACC authorization enabled for each application policy.
+            </para>
+
+            <para>
+               Restart the server to ensure the new security policy takes effect.
+            </para>
+         </step>
+      </procedure>
+
+      <formalpara>
+         <title>Setting authorization for specific EJB and WEB components</title>
+         <para>
+            If applications require more granular security policies, you can declare multiple authorization security policies for each application policy. New security domains can inherit base settings from             another application policy, and  override specific settings such as the authorization policy module.
+         </para>
+      </formalpara>
+
+      <procedure id="proc-Set_Auth_Policies_For_Specific_Domains">
+         <title>Set authorization policies for specific security domains </title>
+         <para>
+            This procedure describes how to inherit settings from  other application policy definitions, and specify different authorization policies per security domain.
+         </para>
+
+         <para>
+            In this procedure, two security domains are defined. The <parameter>test-domain</parameter> security domain uses the UsersRolesLoginModule login module and uses JACC authorization. The 
+            <parameter>test-domain-inherited</parameter> security domain inherits the login module information from <parameter>test-domain</parameter>, and specifies XACML authorization must be used.
+         </para>
+
+         <step>
+            <title>Open the security policy </title>
+            <para>
+               You can specify the  security domain settings in the <filename>login-config.xml</filename> file, or create a deployment descriptor file containing the settings. Choose the deployment 
+               descriptor if you want to package the security domain settings with your application.
+            </para>
+
+            <stepalternatives performance="required">
+               <step performance="optional">
+                  <title>Locate and open login-config.xml</title>
+                  <para>
+                     Navigate to the <filename>login-config.xml</filename> file for the server profile you are using and open the file for editing. For example:
+                  </para>
+
+                  <para>
+                     <filename><replaceable>$JBOSS_HOME</replaceable>/jboss-as/server/$PROFILE/conf/login.config.xml</filename>
+                  </para>
+               </step>
+
+               <step performance="optional">
+                  <title>Create a jboss-beans.xml descriptor</title>
+                  <para>
+                     Create a <filename><replaceable>[prefix]</replaceable>-jboss-beans.xml</filename> descriptor, replacing <replaceable>[prefix]</replaceable> with a meaningful name (for example,                               <filename>test-war-jboss-beans.xml</filename>)
+                  </para>
+
+                  <para>
+                     Save this file in the deploy directory of the server profile you are configuring. For example:
+                  </para>
+
+                  <para>
+                     <filename><replaceable>$JBOSS_HOME</replaceable>/jboss-as/server/$PROFILE/deploy/test-war-jboss-beans.xml</filename>
+                  </para>
+               </step>
+            </stepalternatives>
+         </step>
+
+         <step>
+            <title>Specify the test-domain security domain</title>
+            <para>
+               In the target file chosen in step 1, specify the <parameter>test-domain</parameter> security domain. This domain contains the authentication information, including the                                       <sgmltag>&lt;login-module&gt;</sgmltag> definition, and the JACC authorization policy module definition.
+            </para>
+
+            <programlisting language="XML" role="XML"><xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="extras/authorization-policy-specific-security-domain-1.xml_sample" parse="text"/>
+            </programlisting>
+         </step>
+
+         <step>
+            <title>Append the test-domain-inherited security domain</title>
+            <para>
+               Append the <parameter>test-domain-inherited</parameter> application policy definition after the <parameter>test-domain</parameter> application policy. Set the <parameter>extends</parameter>                  attribute to <literal>other</literal>, so the login module information is inherited. Specify the XACML authorization module in the <sgmltag>&lt;policy.module&gt;</sgmltag> element.
+            </para>
+
+            <programlisting language="XML" role="XML"><xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="extras/authorization-policy-specific-security-domain-2.xml_sample" parse="text"/>
+            </programlisting>
+         </step>
+
+         <step>
+            <title>Restart server</title>
+               <para>
+                  You have now configured the target file with two security domains that use different authorization methods.
+               </para>
+
+               <para>
+                  Restart the server to ensure the new security policy takes effect.
+               </para>
+         </step>
+      </procedure>
+
+      <formalpara>
+         <title>Setting authorization module delegates</title>
+         <para>
+            <xref linkend="proc-Set_Auth_Policies_For_All_EJB_WAR_Components"/> and <xref linkend="proc-Set_Auth_Policies_For_Specific_Domains"/> describe simplistic examples that show how authentication and            authorization can be configured in security domains.
+         </para>
+      </formalpara>
+
+      <para>
+         Because authorization relates to the type of component (not the layer) you want to protect, you can use delegation within a deployment descriptor to specify different authorization policies to the           standard authentication in your implementation.
+      </para>
+
+      <para>
+         The delegates must be a subclass of <classname>AuthorizationModuleDelegate</classname>. <xref linkend="exam-security-AuthorizationModuleDelegate_Class"/> describes the base                                   <classname>AuthorizationModuleDelegate</classname> interface.
+      </para>
+
+      <example id="exam-security-AuthorizationModuleDelegate_Class">
+         <title>AuthorizationModuleDelegate class</title>
+         <programlisting language="Java" role="JAVA"><xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="extras/security-policies-authorization_delegate_example.java" parse="text"/>
+         </programlisting>
+      </example>
+
+      <para>
+         Some examples of authorization delegation are included for reference. <xref linkend="exam-security-EJBJACCPolicyModuleDelegate_Module"/> describes an authorization module responsible for                     authorization decisions for the EJB layer. <xref linkend="exam-security-WebJACCPolicyModuleDelegate_Module"/> describes a JACC-based authorization module helper that controls web layer authorization         decisions.
+      </para>
+
+      <example id="exam-security-EJBJACCPolicyModuleDelegate_Module">
+         <title>EJBJACCPolicyModuleDelegate.java</title>
+         <programlisting language="Java" role="JAVA"><xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="extras/security-policies-EJBJACCPolicyModuleDelegate.java" parse="text"/>
+         </programlisting>
+      </example>
+
+      <example id="exam-security-WebJACCPolicyModuleDelegate_Module">
+         <title>WebJACCPolicyModuleDelegate.java</title>
+         <programlisting language="Java" role="JAVA"><xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="extras/security-policies-WebJACCPolicyModuleDelegate.java" parse="text"/>
+         </programlisting>
+      </example>
+   </chapter>

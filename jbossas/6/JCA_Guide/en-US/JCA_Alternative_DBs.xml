@@ -1,0 +1,1224 @@
+<?xml version='1.0'?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+	  ]>
+
+<chapter id="alternative_DBs">
+  <title>Use Alternative Databases with JBoss AS</title>
+  <section>
+    <title>How to Use Alternative Databases</title>
+    <para>
+        <indexterm><primary>Configuration</primary><secondary>databases</secondary></indexterm>
+JBoss utilizes the Hypersonic database as its default database. While this is good for development and prototyping, you or your company will probably require another database to be used for production. This chapter covers configuring JBoss AS to use alternative databases. We cover the procedures for all officially supported databases on the JBoss Application Server. They include: MySQL 5.0, PostgreSQL 8.1, Oracle 9i and 10g R2, DB2 7.2 and 8, Sybase ASE 12.5, as well as MS SQL 2005.
+    </para>
+		
+    <para>Please note that in this chapter, we explain how to use alternative databases to support all services in JBoss AS. This includes all the system level services such as EJB and JMS. For individual applications (e.g., WAR or EAR) deployed in JBoss AS, you can still use any backend database by setting up the appropriate data source connection. </para>
+        
+    <para>We assume that you have already installed the external database server, and have it running. You should create an empty database named <literal>jboss</literal>, accessible via the username / password pair <literal>jbossuser / jbosspass</literal>. The <literal>jboss</literal> database is used to store JBoss AS internal data -- JBoss AS will automatically create tables and data in it.</para>
+		
+  </section>
+	
+  <section>
+    <title>Install JDBC Drivers</title>
+    
+    <para>For the JBoss Application Server and our applications to use the external database, we also need to install the database's JDBC driver. The JDBC driver is a JAR file, which you'll need to copy into your JBoss AS's <literal>&lt;JBoss_Home&gt;/server/all/lib</literal> directory. Replace <literal>all</literal> with the server configuration you are using if needed. This file is loaded when JBoss starts up. So if you have the JBoss AS running, you'll need to shut down and restart. The availability of JDBC drivers for different databases are as follows. 
+    </para>
+    
+    
+    <itemizedlist>
+	   <listitem><para>IBM DB2 JDBC drivers can be downloaded from the IBM web site <ulink url="http://www-306.ibm.com/software/data/db2/java/">http://www-306.ibm.com/software/data/db2/java/</ulink>.
+	</para></listitem>
+      
+<listitem><para>Sybase JDBC drivers can be downloaded from the Sybase jConnect product page <ulink url="http://www.sybase.com/products/allproductsa-z/softwaredeveloperkit/jconnect">http://www.sybase.com/products/allproductsa-z/softwaredeveloperkit/jconnect</ulink></para></listitem>
+      
+<listitem><para>MS SQL Server JDBC drivers can be downloaded from the MSDN web site <ulink url="http://msdn.microsoft.com/data/jdbc/">http://msdn.microsoft.com/data/jdbc/</ulink>.</para></listitem>
+    </itemizedlist>
+	
+    	<section><title>Special notes on Sybase</title>
+		<para>
+			Some of the services in JBoss uses null values for the default tables that are created.
+			Sybase Adaptive Server should be configured to allow nulls by default.
+
+<screen><command>sp_dboption db_name, "allow nulls by default", true</command></screen>
+			
+			Refer the sybase manuals for more options.
+		</para>
+		<formalpara><title>Enable JAVA services</title>
+	<para>
+	To use any java service like JMS, CMP, timers etc. configured with Sybase, java should be enabled on Sybase Adaptive Server. To do this use:
+<screen><command>sp_configure "enable java",1</command></screen>
+
+			Refer to the sybase manuals for more information.
+			</para>
+		</formalpara>
+			<para>
+			If java is not enabled you might see this exception being thrown when you try to use any of the above services.
+<screen>com.sybase.jdbc2.jdbc.SybSQLException: Cannot run this command because Java services are not enabled. A user with System Administrator (SA) role must reconfigure the system to enable Java</screen>			
+		</para>
+		
+		
+<formalpara><title>CMP Configuration</title>
+			<para>			
+				To use Container Managed Persistence for user defined Java objects with Sybase Adaptive Server Enterprise the java classes should be installed in the database. The system table 'sysxtypes' contains one row for each extended, Java-SQL datatype. This table is only used for Adaptive Servers enabled for Java. Install java classes using the installjava program. 
+		
+		
+<screen><command>installjava -f &lt;jar-file-name&gt; -S&lt;sybase-server&gt; -U&lt;super-user&gt; -P&lt;super-pass&gt; -D&lt;db-name&gt;</command></screen>
+								
+			Refer the installjava manual in Sybase for more options.
+		</para>
+	</formalpara>							
+			
+			<note><title>Installing Java Classes</title>
+			
+			<orderedlist>
+				<listitem>
+					<para>
+			You have to be a super-user with required privileges to install java classes.
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+					The jar file you are trying to install should be created without compression.
+				</para>
+			</listitem>
+			<listitem>
+					<para>
+					Java classes that you install and use in the server must be compiled with JDK 1.2.2. If you compile a class with a later JDK, you will be able to install it in the server using the installjava utility, but you will get a java.lang.ClassFormatError exception when you attempt to use the class. This is because Sybase Adaptive  Server uses an older JVM internally, and hence requires the java classes to be compiled with the same.
+				</para>
+			</listitem>
+		</orderedlist>					
+		
+		</note>
+  </section>
+  
+  <section id="Configuring_JDBC_DataSources">
+	  <title>Configuring JDBC DataSources</title>
+	  <para>
+		  Rather than configuring the connection manager factory related MBeans discussed in the previous section via a mbean services deployment descriptor, JBoss provides a simplified datasource centric descriptor. This is transformed into the standard <literal>jboss-service.xml</literal> MBean services deployment descriptor using a XSL transform applied by the <literal>org.jboss.deployment.XSLSubDeployer</literal> included in the <literal>jboss-jca.sar</literal> deployment. The simplified configuration descriptor is deployed the same as other deployable components. The descriptor must be named using a <literal>*-ds.xml</literal> pattern in order to be recognized by the <literal>XSLSubDeployer</literal>.
+	  </para>
+	  <para>
+		  The schema for the top-level datasource elements of the <literal>*-ds.xml</literal> configuration deployment file is shown in <xref linkend="Configuring_JDBC_DataSources-The_simplified_JCA_DataSource_configuration_descriptor_top_level_schema_elements" />.
+	  </para>
+	  <figure id="Configuring_JDBC_DataSources-The_simplified_JCA_DataSource_configuration_descriptor_top_level_schema_elements">
+		  <title>The simplified JCA DataSource configuration descriptor top-level schema elements</title>
+		  <mediaobject>
+			  <imageobject>
+				  <imagedata align="center" fileref="images/jboss_ds.jpg" />
+			  </imageobject>
+		  </mediaobject>
+	  </figure>
+	  <para>
+		  Multiple datasource configurations may be specified in a configuration deployment file. The child elements of the datasources root are:
+	  </para>
+	  <itemizedlist>
+		  <listitem>
+			  <para>
+				  <emphasis role="bold">mbean</emphasis>: Any number mbean elements may be specified to define MBean services that should be included in the <literal>jboss-service.xml</literal> descriptor that results from the transformation. This may be used to configure services used by the datasources.
+			  </para>
+		  </listitem>
+		  <listitem>
+			  <para>
+				  <emphasis role="bold">no-tx-datasource</emphasis>: This element is used to specify the (<literal>org.jboss.resource.connectionmanager</literal>) <literal>NoTxConnectionManager</literal> service configuration. <literal>NoTxConnectionManager</literal> is a JCA connection manager with no transaction support. The <literal>no-tx-datasource</literal> child element schema is given in <xref linkend="Configuring_JDBC_DataSources-The_non_transactional_DataSource_configuration_schema" />.
+			  </para>
+		  </listitem>
+		  <listitem>
+			  <para>
+				  <emphasis role="bold">local-tx-datasource</emphasis>: This element is used to specify the (<literal>org.jboss.resource.connectionmanager</literal>) <literal>LocalTxConnectionManager</literal> service configuration. <literal>LocalTxConnectionManager</literal> implements a <literal>ConnectionEventListener</literal> that implements <literal>XAResource</literal> to manage transactions through the transaction manager. To ensure that all work in a local transaction occurs over the same <literal>ManagedConnection</literal>, it includes a xid to <literal>ManagedConnection</literal> map. When a Connection is requested or a transaction started with a connection handle in use, it checks to see if a <literal>ManagedConnection</literal> already exists enrolled in the global transaction and uses it if found. Otherwise, a free <literal>ManagedConnection</literal> has its <literal>LocalTransaction</literal> started and is used. The <literal>local-tx-datasource</literal> child element schema is given in <xref linkend="Configuring_JDBC_DataSources-The_non_XA_DataSource_configuration_schema" />
+			  </para>
+		  </listitem>
+		  <listitem>
+			  <para>
+				  <emphasis role="bold">xa-datasource</emphasis>: This element is used to specify the (<literal>org.jboss.resource.connectionmanager</literal>) <literal>XATxConnectionManager</literal> service configuration. <literal>XATxConnectionManager</literal> implements a <literal>ConnectionEventListener</literal> that obtains the <literal>XAResource</literal> to manage transactions through the transaction manager from the adaptor <literal>ManagedConnection</literal>. To ensure that all work in a local transaction occurs over the same <literal>ManagedConnection</literal>, it includes a xid to <literal>ManagedConnection</literal> map. When a <literal>Connection</literal> is requested or a transaction started with a connection handle in use, it checks to see if a <literal>ManagedConnection</literal> already exists enrolled in the global transaction and uses it if found. Otherwise, a free <literal>ManagedConnection</literal> has its <literal>LocalTransaction</literal> started and is used. The <literal>xa-datasource</literal> child element schema is given in <xref linkend="Configuring_JDBC_DataSources-The_XA_DataSource_configuration_schema" />.
+			  </para>
+		  </listitem>
+		  <listitem>
+			  <para>
+				  <emphasis role="bold">ha-local-tx-datasource</emphasis>: This element is identical to <literal>local-tx-datasource</literal>, with the addition of the experimental datasource failover capability allowing JBoss to failover to an alternate database in the event of a database failure.
+			  </para>
+		  </listitem>
+		  <listitem>
+			  <para>
+				  <emphasis role="bold">ha-xa-datasource</emphasis>: This element is identical to <literal>xa-datasource</literal>, with the addition of the experimental datasource failover capability allowing JBoss to failover to an alternate database in the event of a database failure.
+			  </para>
+		  </listitem>
+	  </itemizedlist>
+	  <figure id="Configuring_JDBC_DataSources-The_non_transactional_DataSource_configuration_schema">
+		  <title>The non-transactional DataSource configuration schema</title>
+		  <mediaobject>
+			  <imageobject>
+				  <imagedata align="center" fileref="images/jboss_ds_no_tx.jpg" />
+			  </imageobject>
+		  </mediaobject>
+	  </figure>
+	  <figure id="Configuring_JDBC_DataSources-The_non_XA_DataSource_configuration_schema">
+		  <title>The non-XA DataSource configuration schema</title>
+		  <mediaobject>
+			  <imageobject>
+				  <imagedata align="center" fileref="images/jboss_ds_local_tx.jpg" />
+			  </imageobject>
+		  </mediaobject>
+	  </figure>
+	  <figure id="Configuring_JDBC_DataSources-The_XA_DataSource_configuration_schema">
+		  <title>The XA DataSource configuration schema</title>
+		  <mediaobject>
+			  <imageobject>
+				  <imagedata align="center" fileref="images/jboss_ds_xa.jpg" />
+			  </imageobject>
+		  </mediaobject>
+	  </figure>
+	  <figure id="Configuring_JDBC_DataSources-The_schema_for_the_experimental_non_XA_DataSource_with_failover">
+		  <title>The schema for the experimental non-XA DataSource with failover</title>
+		  <mediaobject>
+			  <imageobject>
+				  <imagedata align="center" fileref="images/jboss_ds_ha_local.jpg" />
+			  </imageobject>
+		  </mediaobject>
+	  </figure>
+	  <figure id="Configuring_JDBC_DataSources-The_schema_for_the_experimental_XA_Datasource_with_failover">
+		  <title>The schema for the experimental XA Datasource with failover</title>
+		  <mediaobject>
+			  <imageobject>
+				  <imagedata align="center" fileref="images/jboss_ds_ha_xa.jpg" />
+			  </imageobject>
+		  </mediaobject>
+	  </figure>
+	  <para>
+		  Elements that are common to all datasources include:
+	  </para>
+	  <itemizedlist>
+		  <listitem>
+			  <para>
+				  <emphasis role="bold">jndi-name</emphasis>: The JNDI name under which the <literal>DataSource</literal> wrapper will be bound. Note that this name is relative to the <literal>java:/</literal> context, unless <literal>use-java-context</literal> is set to false. <literal>DataSource</literal> wrappers are not usable outside of the server VM, so they are normally bound under the <literal>java:/</literal>, which isn&#39;t shared outside the local VM.
+			  </para>
+		  </listitem>
+		  <listitem>
+			  <para>
+				  <emphasis role="bold">use-java-context</emphasis>: If this is set to false the the datasource will be bound in the global JNDI context rather than the <literal>java:</literal> context.
+			  </para>
+		  </listitem>
+		  <listitem>
+			  <para>
+				  <emphasis role="bold">user-name</emphasis>: This element specifies the default username used when creating a new connection. The actual username may be overridden by the application code <literal>getConnection</literal> parameters or the connection creation context JAAS Subject.
+			  </para>
+		  </listitem>
+		  <listitem>
+			  <para>
+				  <emphasis role="bold">password</emphasis>: This element specifies the default password used when creating a new connection. The actual password may be overridden by the application code <literal>getConnection</literal> parameters or the connection creation context JAAS Subject.
+			  </para>
+		  </listitem>
+		  <listitem>
+			  <para>
+				  <emphasis role="bold">application-managed-security</emphasis>: Specifying this element indicates that connections in the pool should be distinguished by application code supplied parameters, such as from <literal>getConnection(user, pw)</literal>.
+			  </para>
+		  </listitem>
+		  <listitem>
+			  <para>
+				  <emphasis role="bold">security-domain</emphasis>: Specifying this element indicates that connections in the pool should be distinguished by JAAS Subject based information. The content of the <literal>security-domain</literal> is the name of the JAAS security manager that will handle authentication. This name correlates to the JAAS <literal>login-config.xml</literal> descriptor <literal>application-policy/name</literal> attribute.
+			  </para>
+		  </listitem>
+		  <listitem>
+			  <para>
+				  <emphasis role="bold">security-domain-and-application</emphasis>: Specifying this element indicates that connections in the pool should be distinguished both by application code supplied parameters and JAAS Subject based information. The content of the <literal>security-domain</literal> is the name of the JAAS security manager that will handle authentication. This name correlates to the JAAS <literal>login-config.xml</literal> descriptor <literal>application-policy/name</literal> attribute.
+			  </para>
+		  </listitem>
+		  <listitem>
+			  <para>
+				  <emphasis role="bold">min-pool-size</emphasis>: This element specifies the minimum number of connections a pool should hold. These pool instances are not created until an initial request for a connection is made. This default to 0.
+			  </para>
+		  </listitem>
+		  <listitem>
+			  <para>
+				  <emphasis role="bold">max-pool-size</emphasis>: This element specifies the maximum number of connections for a pool. No more than the <literal>max-pool-size</literal> number of connections will be created in a pool. This defaults to 20.
+			  </para>
+		  </listitem>
+		  <listitem>
+			  <para>
+				  <emphasis role="bold">blocking-timeout-millis</emphasis>: This element specifies the maximum time in milliseconds to block while waiting for a connection before throwing an exception. Note that this blocks only while waiting for a permit for a connection, and will never throw an exception if creating a new connection takes an inordinately long time. The default is 5000.
+			  </para>
+		  </listitem>
+		  <listitem>
+			  <para>
+				  <emphasis role="bold">idle-timeout-minutes</emphasis>: This element specifies the maximum time in minutes a connection may be idle before being closed. The actual maximum time depends also on the <literal>IdleRemover</literal> scan time, which is 1/2 the smallest idle-timeout-minutes of any pool.
+			  </para>
+		  </listitem>
+		  <listitem>
+			  <para>
+				  <emphasis role="bold">new-connection-sql</emphasis>: This is a SQL statement that should be executed when a new connection is created. This can be used to configure a connection with database specific settings not configurable via connection properties.
+			  </para>
+		  </listitem>
+		  <listitem>
+			  <para>
+				  <emphasis role="bold">check-valid-connection-sql</emphasis>: This is a SQL statement that should be run on a connection before it is returned from the pool to test its validity to test for stale pool connections. An example statement could be: <literal>select count(*) from x</literal>.
+			  </para>
+		  </listitem>
+		  <listitem>
+			  <para>
+				  <emphasis role="bold">exception-sorter-class-name</emphasis>: This specifies a class that implements the <literal>org.jboss.resource.adapter.jdbc.ExceptionSorter</literal> interface to examine database exceptions to determine whether or not the exception indicates a connection error. Current implementations include:
+			  </para>
+			  <itemizedlist spacing="compact">
+				  <listitem>
+					  <para>
+						  org.jboss.resource.adapter.jdbc.vendor.OracleExceptionSorter
+					  </para>
+				  </listitem>
+				  <listitem>
+					  <para>
+						  org.jboss.resource.adapter.jdbc.vendor.MySQLExceptionSorter
+					  </para>
+				  </listitem>
+				  <listitem>
+					  <para>
+						  org.jboss.resource.adapter.jdbc.vendor.SybaseExceptionSorter
+					  </para>
+				  </listitem>
+				  <listitem>
+					  <para>
+						  org.jboss.resource.adapter.jdbc.vendor.InformixExceptionSorte
+					  </para>
+				  </listitem>
+			  </itemizedlist>
+		  </listitem>
+		  <listitem>
+			  <para>
+				  <emphasis role="bold">valid-connection-checker-class-name</emphasis>: This specifies a class that implements the <literal>org.jboss.resource.adapter.jdbc.ValidConnectionChecker</literal> interface to provide a <literal>SQLException isValidConnection(Connection e)</literal> method that is called with a connection that is to be returned from the pool to test its validity. This overrides the <literal>check-valid-connection-sql</literal> when present. The only provided implementation is <literal>org.jboss.resource.adapter.jdbc.vendor.OracleValidConnectionChecker</literal>.
+			  </para>
+		  </listitem>
+		  <listitem>
+			  <para>
+				  <emphasis role="bold">track-statements</emphasis>: This boolean element specifies whether to check for unclosed statements when a connection is returned to the pool. If true, a warning message is issued for each unclosed statement. If the log4j category <literal>org.jboss.resource.adapter.jdbc.WrappedConnection</literal> has trace level enabled, a stack trace of the connection close call is logged as well. This is a debug feature that can be turned off in production.
+			  </para>
+		  </listitem>
+		  <listitem>
+			  <para>
+				  <emphasis role="bold">prepared-statement-cache-size</emphasis>: This element specifies the number of prepared statements per connection in an LRU cache, which is keyed by the SQL query. Setting this to zero disables the cache.
+			  </para>
+		  </listitem>
+		  <listitem>
+			  <para>
+				  <emphasis role="bold">depends</emphasis>: The <literal>depends</literal> element specifies the JMX <literal>ObjectName</literal> string of a service that the connection manager services depend on. The connection manager service will not be started until the dependent services have been started.
+			  </para>
+		  </listitem>
+		  <listitem>
+			  <para>
+				  <emphasis role="bold">type-mapping</emphasis>: This element declares a default type mapping for this datasource. The type mapping should match a <literal>type-mapping/name</literal> element from <literal>standardjbosscmp-jdbc.xml</literal>.
+			  </para>
+		  </listitem>
+	  </itemizedlist>
+	  <para>
+		  Additional common child elements for both <literal>no-tx-datasource</literal> and <literal>local-tx-datasource</literal> include:
+	  </para>
+	  <itemizedlist>
+		  <listitem>
+			  <para>
+				  <emphasis role="bold">connection-url</emphasis>: This is the JDBC driver connection URL string, for example, <literal>jdbc:hsqldb:hsql://localhost:1701</literal>.
+			  </para>
+		  </listitem>
+		  <listitem>
+			  <para>
+				  <emphasis role="bold">driver-class</emphasis>: This is the fully qualified name of the JDBC driver class, for example, <literal>org.hsqldb.jdbcDriver</literal>.
+			  </para>
+		  </listitem>
+		  <listitem>
+			  <para>
+				  <emphasis role="bold">connection-property</emphasis>: The <literal>connection-property</literal> element allows you to pass in arbitrary connection properties to the <literal>java.sql.Driver.connect(url, props)</literal> method. Each <literal>connection-property</literal> specifies a string name/value pair with the property name coming from the name attribute and the value coming from the element content.
+			  </para>
+		  </listitem>
+	  </itemizedlist>
+	  <para>
+		  Elements in common to the <literal>local-tx-datasource</literal> and <literal>xa-datasource</literal> are:
+	  </para>
+	  <itemizedlist>
+		  <listitem>
+			  <para>
+				  <emphasis role="bold">transaction-isolation</emphasis>: This element specifies the <literal>java.sql.Connection</literal> transaction isolation level to use. The constants defined in the Connection interface are the possible element content values and include:
+			  </para>
+			  <itemizedlist spacing="compact">
+				  <listitem>
+					  <para>
+						  TRANSACTION_READ_UNCOMMITTED
+					  </para>
+				  </listitem>
+				  <listitem>
+					  <para>
+						  TRANSACTION_READ_COMMITTED
+					  </para>
+				  </listitem>
+				  <listitem>
+					  <para>
+						  TRANSACTION_REPEATABLE_READ
+					  </para>
+				  </listitem>
+				  <listitem>
+					  <para>
+						  TRANSACTION_SERIALIZABLE
+					  </para>
+				  </listitem>
+				  <listitem>
+					  <para>
+						  TRANSACTION_NONE
+					  </para>
+				  </listitem>
+			  </itemizedlist>
+		  </listitem>
+		  <listitem>
+			  <para>
+				  <emphasis role="bold">no-tx-separate-pools</emphasis>: The presence of this element indicates that two connection pools are required to isolate connections used with JTA transaction from those used without a JTA transaction. The pools are lazily constructed on first use. Its use case is for Oracle (and possibly other vendors) XA implementations that don&#39;t like using an XA connection with and without a JTA transaction.
+			  </para>
+		  </listitem>
+	  </itemizedlist>
+	  <para>
+		  The unique <literal>xa-datasource</literal> child elements are:
+	  </para>
+	  <itemizedlist>
+		  <listitem>
+			  <para>
+				  <emphasis role="bold">track-connection-by-tx</emphasis>: Specifying a true value for this element makes the connection manager keep an xid to connection map and only put the connection back in the pool when the transaction completes and all the connection handles are closed or disassociated (by the method calls returning). As a side effect, we never suspend and resume the xid on the connection&#39;s <literal>XAResource</literal>. This is the same connection tracking behavior used for local transactions.
+			  </para>
+			  <para>
+				  The XA spec implies that any connection may be enrolled in any transaction using any xid for that transaction at any time from any thread (suspending other transactions if necessary). The original JCA implementation assumed this and aggressively delisted connections and put them back in the pool as soon as control left the EJB they were used in or handles were closed. Since some other transaction could be using the connection the next time work needed to be done on the original transaction, there is no way to get the original connection back. It turns out that most <literal>XADataSource</literal> driver vendors do not support this, and require that all work done under a particular xid go through the same connection.
+			  </para>
+		  </listitem>
+		  <listitem>
+			  <para>
+				  <emphasis role="bold">xa-datasource-class</emphasis>: The fully qualified name of the <literal>javax.sql.XADataSource</literal> implementation class, for example, <literal>com.informix.jdbcx.IfxXADataSource</literal>.
+			  </para>
+		  </listitem>
+		  <listitem>
+			  <para>
+				  <emphasis role="bold">xa-datasource-property</emphasis>: The <literal>xa-datasource-property</literal> element allows for specification of the properties to assign to the <literal>XADataSource</literal> implementation class. Each property is identified by the name attribute and the property value is given by the <literal>xa-datasource-property</literal> element content. The property is mapped onto the <literal>XADataSource</literal> implementation by looking for a JavaBeans style getter method for the property name. If found, the value of the property is set using the JavaBeans setter with the element text translated to the true property type using the <literal>java.beans.PropertyEditor</literal> for the type.
+			  </para>
+		  </listitem>
+		  <listitem>
+			  <para>
+				  <emphasis role="bold">isSameRM-override-value</emphasis>: A boolean flag that allows one to override the behavior of the <literal>javax.transaction.xa.XAResource.isSameRM(XAResource xaRes)</literal> method behavior on the XA managed connection. If specified, this value is used unconditionally as the <literal>isSameRM(xaRes)</literal> return value regardless of the <literal>xaRes</literal> parameter.
+			  </para>
+		  </listitem>
+	  </itemizedlist>
+	  <para>
+		  The failover options common to <literal>ha-xa-datasource</literal> and <literal>ha-local-tx-datasource</literal> are:
+	  </para>
+	  <itemizedlist>
+		  <listitem>
+			  <para>
+				  <emphasis role="bold">url-delimeter</emphasis>: This element specifies a character used to separate multiple JDBC URLs.
+			  </para>
+		  </listitem>
+		  <listitem>
+			  <para>
+				  <emphasis role="bold">url-property</emphasis>: In the case of XA datasources, this property specifies the name of the <literal>xa-datasource-property</literal> that contains the list of JDBC URLs to use.
+			  </para>
+		  </listitem>
+		</itemizedlist>
+		
+	</section>
+</section>
+
+<section>
+    <title>Creating a DataSource for the External Database</title>
+    
+    <para>JBoss AS connects to relational databases via datasources. These datasource definitions can be found in the <literal>&lt;JBoss_Home&gt;/server/all/deploy</literal> directory. The datasource definitions are deployable just like WAR and EAR files. The datasource files can be recognized by looking for the XML files that end in <literal>*-ds.xml</literal>.</para>
+    
+<note><title>Datasource definition files</title>
+<para>The datasource definition files for all supported external databases can be found in the <literal>&lt;JBoss_Home&gt;/docs/examples/jca</literal> directory.</para>
+</note>
+
+    <itemizedlist>
+      <listitem><para>MySQL: <literal>mysql-ds.xml</literal></para></listitem>
+      <listitem><para>PostgreSQL: <literal>postgres-ds.xml</literal></para></listitem>
+      <listitem><para>Oracle: <literal>oracle-ds.xml</literal></para></listitem>
+      <listitem><para>DB2: <literal>db2-ds.xml</literal></para></listitem>
+      <listitem><para>Sybase: <literal>sybase-ds.xml</literal></para></listitem>
+      <listitem><para>MS SQL Server: <literal>mssql-ds.xml</literal></para></listitem>     
+    </itemizedlist>
+    
+    <para>The following code snippet shows the <literal>mysql-ds.xml</literal> file as an example. All the other <literal>*-ds.xml</literal> files are very similiar. You will need to change the <literal>connection-url</literal>, as well as the <literal>user-name</literal> / <literal>password</literal>, to fit your own database server installation.</para>
+    
+<programlisting role="XML">&lt;datasources&gt;
+&lt;local-tx-datasource&gt;
+&lt;jndi-name&gt;MySqlDS&lt;/jndi-name&gt;
+&lt;connection-url&gt;jdbc:mysql://localhost:3306/jboss&lt;/connection-url&gt;
+&lt;driver-class&gt;com.mysql.jdbc.Driver&lt;/driver-class&gt;
+&lt;user-name&gt;jbossuser&lt;/user-name&gt;
+&lt;password&gt;jbosspass&lt;/password&gt;
+&lt;exception-sorter-class-name&gt;
+org.jboss.resource.adapter.jdbc.vendor.MySQLExceptionSorter
+&lt;/exception-sorter-class-name&gt;
+&lt;!-- should only be used on drivers after 3.22.1 with "ping" support
+&lt;valid-connection-checker-class-name&gt;
+org.jboss.resource.adapter.jdbc.vendor.MySQLValidConnectionChecker
+&lt;/valid-connection-checker-class-name&gt;
+--&gt;
+&lt;!-- sql to call when connection is created
+&lt;new-connection-sql&gt;some arbitrary sql&lt;/new-connection-sql&gt;
+--&gt;
+&lt;!-- sql to call on an existing pooled connection when it is obtained from pool - 
+ MySQLValidConnectionChecker is preferred for newer drivers
+&lt;check-valid-connection-sql&gt;some arbitrary sql&lt;/check-valid-connection-sql&gt;
+ --&gt;
+   
+&lt;!-- corresponding type-mapping in the standardjbosscmp-jdbc.xml (optional) --&gt;
+   &lt;metadata&gt;
+ &lt;type-mapping&gt;mySQL&lt;/type-mapping&gt;
+ &lt;/metadata&gt;
+ &lt;/local-tx-datasource&gt;
+    
+&lt;/datasources&gt;</programlisting>
+    
+<para>Once you customized the <literal>*-ds.xml</literal> file to connect to your external database, you need to copy it to the <literal>&lt;JBoss_Home&gt;/server/all/deploy</literal> directory. The database connection is now available through the JNDI name specified in the <literal>*-ds.xml</literal> file.</para>
+</section>
+
+<section><title>Common configuration for DataSources and ConnectionFactorys</title>
+	
+	<section><title>General</title>
+		<itemizedlist>
+			<listitem>
+				<para>
+					<emphasis>&lt;mbean&gt;</emphasis> - a standard jboss mbean deployment 
+				</para>
+			</listitem>
+			<listitem>
+				<para>
+					<emphasis>&lt;depends&gt;</emphasis> - the ObjectName of an MBean service this ConnectionFactory or DataSource deployment depends upon 
+				</para>
+			</listitem>
+			<listitem>
+				<para>
+					<emphasis>&lt;jndi-name&gt;</emphasis> - the jndi name where it is bound. This is prefixed with java by default: 
+				</para>
+			</listitem>
+			<listitem>
+				<para>
+					<emphasis>&lt;use-java-context&gt;</emphasis> - set this to false to drop the java: context from the jndi name 
+				</para>
+			</listitem>
+		</itemizedlist>
+	</section>
+	
+	<section>
+		<title>XA</title>
+		<para>
+			<emphasis>&lt;xa-resource-timeout&gt;</emphasis> - the number of seconds passed to 
+			<screen>XAResource.setTranasctionTimeout()</screen>
+			when not zero. This feature is available on JBoss AS 4.0.3 and above. 
+		</para>
+	</section>
+	
+	
+	<section><title>Security parameters</title>
+		<para>
+			
+			JCA Login Modules - are used to inject security configuration into the connection when configured 
+		</para>
+		
+		<itemizedlist>
+			<listitem>
+				<para>
+					<emphasis>nothing</emphasis> - uses the user/password specified in <filename>-ds.xml</filename> for DataSources or the <literal>getConnection/createConnection</literal> method without a <literal>user/password</literal> (the default).
+				</para>
+			</listitem>
+			<listitem>
+				<para>
+					<emphasis>&lt;application-managed-security&gt;</emphasis> - uses the user/password passed on the <literal>getConnection</literal> or <literal>createConnection</literal> request by the application.
+				</para>
+			</listitem>
+			<listitem>
+				<para>
+					<emphasis>&lt;security-domain&gt;</emphasis> - uses the identified login module configured in <filename>conf/login-module.xml</filename>. 
+				</para>
+			</listitem>
+			<listitem>
+				<para>
+					<emphasis>&lt;security-domain-and-application&gt;</emphasis> - uses the identified login module configured in <filename>conf/login-module.xml</filename> and other connection request information supplied by the application, e.g. queue or topic in JMS.
+				</para>
+			</listitem>
+		</itemizedlist>
+		
+		
+		<section><title>Pooling parameters</title>
+			
+			<itemizedlist>
+				<listitem>
+					<para>
+						<emphasis>&lt;no-tx-separate-pools&gt;</emphasis> - whether separate subpools should be created for connections inside and outside JTA transactions (default false). 
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						<emphasis>&lt;min-pool-size&gt;</emphasis> - the minimum number of connections in the pool (default 0 - zero) 
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						<emphasis>&lt;max-pool-size&gt;</emphasis> - the maximum number of connections in the pool (default 20) 
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						<emphasis>&lt;blocking-timeout-millis&gt;</emphasis> - the length of time to wait for a connection to become available when all the connections are checked out (default 5000 == 5 seconds, from 3.2.4 it is 30000 == 30 seconds) 
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						<emphasis>&lt;idle-timeout-minutes&gt;</emphasis> - the number of minutes after which unused connections are closed (default 15 minutes) 
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						<emphasis>&lt;track-connection-by-tx&gt;</emphasis> - whether the connection should be <emphasis>"locked"</emphasis> to the transaction, returning it to the pool at the end of the transaction; in pre-JBoss-5.x releases the default value for Local connection factories is true and false for XA; since JBoss-5.x the default value is true for both Local and XA and the element is deprecated.
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						<emphasis>&lt;interleaving/&gt;</emphasis> - enables interleaving for XA connection factories (this feature was added in JBoss-5.x) 
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						<emphasis>&lt;prefill&gt;</emphasis> - whether to attempt to prefill the connection pool to the minimum number of connections. NOTE: only supporting pools (OnePool) support this feature. A warning can be found in the logs if the pool does not support this. This feature is available in JBoss 4.0.5 and above. 
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						<emphasis>&lt;background-validation&gt;</emphasis> - In JBoss 4.0.5, background connection validation was added to reduce the overall load on the RDBMS system when validating a connection. When using this feature, JBoss will attempt to validate the current connections in the pool as a seperate thread (ConnectionValidator).
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						<emphasis>&lt;background-validation-minutes&gt;</emphasis> - The interval, in minutes, that the ConnectionValidator will run. NOTE: It is prudent to set this value to something greater or less than the <emphasis>&lt;idle-timeout-minutes&gt;</emphasis> 
+					</para>
+				</listitem>
+				<listitem>
+					<para>
+						<emphasis>&lt;use-fast-fail&gt;</emphasis> - Whether or not to continue to attempt to acquire a connection from the pool even if the nth attempt has failed. False by default. This is to address performance issues where SQL validation may take significant time and resources to execute. 
+					</para>
+				</listitem>
+			</itemizedlist>
+			
+		</section>
+		
+		<section><title>Security and Pooling</title>
+			<para>
+				Unless the ResourceAdapter has <emphasis>&lt;reauthentication-support&gt;</emphasis> using multiple security identities will create subpools for each identity.
+			</para>
+<note><title>Note</title>
+<para>
+	The min and max pool size are per subpool so be careful with these parameters if you have lots of identities.
+</para>
+</note>
+	
+			    </section>
+
+    
+</section>
+   
+    
+    
+    
+    
+    
+  </section>    
+  
+  <section>
+    <title>Change Database for the JMS Services</title>
+    
+    <para>The JMS service in the JBoss AS uses relational databases to persist its messages. For improved performance, we should change the JMS service to take advantage of the external database. To do that, we need to replace the file <literal>&lt;JBoss_Home&gt;/server/all/deploy/jms-singleton/hsqldb-jdbc2-service.xml</literal> with a file in <literal>&lt;JBoss_Home&gt;/docs/examples/jms/</literal> depending on your external database. Notice that if you are using the <literal>default</literal> server profile, the file path is <literal>&lt;JBoss_Home&gt;/server/default/deploy/jms/hsqldb-jdbc2-service.xml</literal>.</para>
+		
+    <itemizedlist>
+      <listitem><para>MySQL: <literal>mysql-jdbc2-service.xml</literal></para></listitem> 
+      <listitem><para>PostgreSQL: <literal>postgres-jdbc2-service.xml</literal></para></listitem>
+      <listitem><para>Oracle: <literal>oracle-jdbc2-service.xml</literal></para></listitem>
+      <listitem><para>DB2: <literal>db2-jdbc2-service.xml</literal></para></listitem>
+      <listitem><para>Sybase: <literal>sybase-jdbc2-service.xml</literal></para></listitem>
+      <listitem><para>MS SQL Server: <literal>mssql-jdbc2-service.xml</literal></para></listitem>     
+    </itemizedlist>
+    
+    <note>
+      <title>What about the hsqldb-jdbc-state-service.xml file?</title>
+      <para>Despite its name, the <literal>hsqldb-jdbc-state-service.xml</literal> file applies to all databases. So, there is no need to use a special <literal>jdbc-state-service.xml</literal> for each database.</para>
+    </note>
+    
+  </section>
+  
+  <section>
+    <title>Support Foreign Keys in CMP Services</title>
+    
+    <para>Next, we need to go change the <literal>&lt;JBoss_Home&gt;/server/all/conf/standardjbosscmp-jdbc.xml</literal> file so that the <literal>fk-constraint</literal> property is <literal>true</literal>. That is needed for all external databases we support on the JBoss Application Server. This file configures the database connection settings for the EJB2 CMP beans deployed in the JBoss AS.</para>
+			
+<programlisting role="XML">&lt;fk-constraint&gt;true&lt;/fk-constraint&gt;</programlisting>
+ 
+  </section>
+  
+  <section>
+    <title>Specify Database Dialect for Java Persistence API</title>
+    
+    <para>The Java Persistence API (JPA) entity manager can save EJB3 entity beans to any backend database. Hibernate provides the JPA implementation in JBoss AS.  Hibernate has a dialect auto-detection mechanism that works for most databases including the dialects for databases referenced in this appendix which are listed below.  If a specific dialect is needed for alternative databases,  you can configure the database dialect in the  <literal>&lt;JBoss_Home&gt;/server/all/deploy/ejb3.deployer/META-INF/persistence.properties</literal> file. You need to un-comment the <literal>hibernate.dialect</literal> property and change its value to the following based on the database you setup. For a complete list of dialects, refer to the Hibernate Reference Guide, Chapter 3, Section 4.1 SQL Dialects.</para>
+          
+    <itemizedlist>
+      <listitem><para>Oracle 9i: org.hibernate.dialect.Oracle9iDialect</para></listitem>
+      <listitem><para>Oracle 10g: org.hibernate.dialect.Oracle10gDialect</para></listitem>
+      <listitem><para>Microsoft SQL Server 2005: org.hibernate.dialect.SQLServerDialect</para></listitem>
+      <listitem><para>PostgresSQL 8.1: org.hibernate.dialect.PostgreSQLDialect</para></listitem>
+      <listitem><para>MySQL 5.0: org.hibernate.dialect.MySQL5Dialect</para></listitem>
+      <listitem><para>DB2 8.0: org.hibernate.dialect.DB2Dialect</para></listitem>
+      <listitem><para>Sybase ASE 12.5: org.hibernate.dialect.SybaseDialect</para></listitem>
+    </itemizedlist>
+    
+    <note><title>DB2 7.2 with Universal JDBC Driver (Type 4)</title>
+	    <para>
+		 Large Objects (LOBs) are supported only with DB2 Version 8 servers and above with the universal JDBC driver.
+		 Hence JMS services which stores messages as BLOBS and Timer services which uses BLOB fields for storing objects do not work with the JDBC Type 4 driver and DB2 7.2.
+	 </para>
+ </note>
+ 
+ <note><title>DB2 7.2 with JDBC Type 2 driver</title>
+	 <para>
+	All JBoss services work with the JDBC Type 2 driver and DB2 Version 7.2 servers.
+	</para>
+    </note>
+	    
+    
+    
+  </section>
+    
+  <section>
+    <title>Change Other JBoss AS Services to Use the External Database</title>
+    
+    <para>Besides JMS, CMP, and JPA, we still need to hook up the rest of JBoss services with the external database. There are two ways to do it. One is easy but inflexible. The other is flexible but requires more steps. Now, let's discuss those two approaches respectively.</para>
+    
+    <section>
+      <title>The Easy Way</title>
+      
+      <para>
+	      The easy way is just to change the JNDI name for the external database to <literal>DefaultDS</literal>. Most JBoss services are hard-wired to use the <literal>DefaultDS</literal> by default. So, by changing the datasource name, we do not need to change the configuration for each service individually.
+      </para>
+      <para>
+	      To change the JNDI name, just open the <literal>*-ds.xml</literal> file for your external database, and change the value of the <literal>jndi-name</literal> property to <literal>DefaultDS</literal>. For instance, in <literal>mysql-ds.xml</literal>, you'd change MySqlDS to DefaultDS and so on. You will need to remove the <literal>&lt;JBoss_Home&gt;/server/all/deploy/hsqldb-ds.xml</literal> file after you are done to avoid duplicated <literal>DefaultDS</literal> definition.
+      </para>
+      <para>
+	      In the <literal>jms/*-jdbc2-service.xml</literal> file, you should also change the datasource name in the <literal>depends</literal> tag for the <literal>PersistenceManagers</literal> MBean to <literal>DefaultDS</literal>. For instance, for <literal>mysql-jdbc2-service.xml</literal> file, we change the <literal>MySqlDS</literal> to <literal>DefaultDS</literal>.  
+	      
+      </para>
+      
+      
+      
+      <para>The easy way is just to change the JNDI name for the external database to <literal>DefaultDS</literal>. Most JBoss services are hard-wired to use the <literal>DefaultDS</literal> by default. So, by changing the datasource name, we do not need to change the configuration for each service individually.</para>
+      
+      <para>To change the JNDI name, just open the <literal>*-ds.xml</literal> file for your external database, and change the value of the <literal>jndi-name</literal> property to <literal>DefaultDS</literal>. For instance, in <literal>mysql-ds.xml</literal>, you'd change <literal>MySqlDS</literal> to <literal>DefaultDS</literal> and so on. You will need to remove the <literal>&lt;JBoss_Home&gt;/server/all/deploy/hsqldb-ds.xml</literal> file after you are done to avoid duplicated <literal>DefaultDS</literal> definition.</para>
+      
+      <para>In the <literal>jms/*-jdbc2-service.xml</literal> file, you should also change the datasource name in the <literal>depends</literal> tag for the <literal>PersistenceManagers</literal> MBean to <literal>DefaultDS</literal>. For instance, for <literal>mysql-jdbc2-service.xml</literal> file, we change the <literal>MySqlDS</literal> to <literal>DefaultDS</literal>.</para>
+      
+<programlisting role="XML">.. ...
+&lt;mbean code="org.jboss.mq.pm.jdbc2.PersistenceManager"
+       name="jboss.mq:service=PersistenceManager"%gt;
+  &lt;depends optional-attribute-name="ConnectionManager"&gt;
+    jboss.jca:service=DataSourceBinding,name=DefaultDS
+  &lt;/depends&gt;
+... ...
+</programlisting>
+      
+    </section>
+    
+    <section>
+      <title>The More Flexible Way</title>
+      
+      <para>Changing the external datasource to <literal>DefaultDS</literal> is convenient. But if you have applications that assume the <literal>DefaultDS</literal> always points to the factory-default HSQL DB, that approach could break your application. Also, changing <literal>DefaultDS</literal> destination forces all JBoss services to use the external database. What if you want to use the external database only on some services?</para>
+      
+      <para>A safer and more flexible way to hook up JBoss AS services with the external datasource is to manually change the <literal>DefaultDS</literal> in all standard JBoss services to the datasource JNDI name defined in your <literal>*-ds.xml</literal> file (e.g., the <literal>MySqlDS</literal> in <literal>mysql-ds.xml</literal> etc.). Below is a complete list of files that contain <literal>DefaultDS</literal>. You can update them all to use the external database on all JBoss services or update some of them to use different combination of datasources for different services.</para>
+      
+      <itemizedlist>
+        <listitem><para><literal>&lt;JBoss_Home&gt;/server/all/conf/login-config.xml</literal>: This file is used in Java EE container managed security services.</para></listitem>
+      
+	<listitem><para><literal>&lt;JBoss_Home&gt;/server/all/conf/standardjbosscmp-jdbc.xml</literal>: This file configures the CMP beans in the EJB container.</para></listitem>
+      
+	<listitem><para><literal>&lt;JBoss_Home&gt;/server/all/deploy/ejb-deployer.xml</literal>: This file configures the JBoss EJB deployer.</para></listitem>
+      
+	<listitem><para><literal>&lt;JBoss_Home&gt;/server/all/deploy/schedule-manager-service.xml</literal>: This file configures the EJB timer services.</para></listitem>
+      
+	<listitem><para><literal>&lt;JBoss_Home&gt;/server/all/deploy/snmp-adaptor.sar/attributes.xml</literal>: This file is used by the SNMP service.</para></listitem>
+      
+	<listitem><para><literal>&lt;JBoss_Home&gt;/server/all/deploy/juddi-service.sar/META-INF/jboss-service.xml</literal>: This file configures the UUDI service.</para></listitem>
+        
+	<listitem><para><literal>&lt;JBoss_Home&gt;/server/all/deploy/juddi-service.sar/juddi.war/WEB-INF/jboss-web.xml</literal>: This file configures the UUDI service.</para></listitem>
+        
+	<listitem><para><literal>&lt;JBoss_Home&gt;/server/all/deploy/juddi-service.sar/juddi.war/WEB-INF/juddi.properties</literal>: This file configures the UUDI service.</para></listitem>
+        
+	<listitem><para><literal>&lt;JBoss_Home&gt;/server/all/deploy/uuid-key-generator.sar/META-INF/jboss-service.xml</literal>: This file configures the UUDI service.</para></listitem>
+        
+	<listitem><para><literal>&lt;JBoss_Home&gt;/server/all/jms/hsqldb-jdbc-state-service.xml</literal> and <literal>&lt;JBoss_Home&gt;/server/all/deploy-hasingleton/jms/hsqldb-jdbc-state-service.xml</literal>: Those files configure the JMS persistence service as we discussed earlier.</para></listitem>
+             
+      </itemizedlist>
+      
+    </section>
+    
+</section>
+  
+  <section>
+    <title>A Special Note About Oracle DataBases</title>
+    
+    <para>In our setup discussed in this chapter, we rely on the JBoss AS to automatically create needed tables in the external database upon server startup. That works most of the time. But for databases like Oracle, there might be some minor issues if you try to use the same database server to back more than one JBoss AS instance.</para>
+    
+    <para>The Oracle database creates tables of the form <literal>schemaname.tablename</literal>. The <literal>TIMERS</literal> and <literal>HILOSEQUENCES</literal> tables needed by JBoss AS would not get created on a schema if the table already exists on a different schema. To work around this issue, you need to edit the <literal>&lt;JBoss_Home&gt;/server/all/deploy/ejb-deployer.xml</literal> file to change the table name from <literal>TIMERS</literal> to something like <literal>schemaname2.tablename</literal>.</para>
+    
+<programlisting role="XML">&lt;mbean code="org.jboss.ejb.txtimer.DatabasePersistencePolicy" 
+name="jboss.ejb:service=EJBTimerService,persistencePolicy=database"&gt;
+&lt;!-- DataSourceBinding ObjectName --&gt;
+&lt;depends optional-attribute-name="DataSource"&gt;
+ jboss.jca:service=DataSourceBinding,name=DefaultDS
+&lt;/depends&gt;
+&lt;!-- The plugin that handles database persistence --&gt;
+&lt;attribute name="DatabasePersistencePlugin"&gt;
+org.jboss.ejb.txtimer.GeneralPurposeDatabasePersistencePlugin
+&lt;/attribute&gt;
+&lt;!-- The timers table name --&gt;
+&lt;attribute name="TimersTable"&gt;TIMERS&lt;/attribute&gt;
+&lt;/mbean&gt; </programlisting>
+    
+    <para>Similarly, you need to change the <literal>&lt;JBoss_Home&gt;/server/all/deploy/uuid-key-generator.sar/META-INF/jboss-service.xml</literal> file to change the table name from <literal>HILOSEQUENCES</literal> to something like <literal>schemaname2.tablename</literal> as well.</para>
+    
+<programlisting>&lt;!-- HiLoKeyGeneratorFactory --&gt;
+&lt;mbean code="org.jboss.ejb.plugins.keygenerator.hilo.HiLoKeyGeneratorFactory"
+name="jboss:service=KeyGeneratorFactory,type=HiLo"&gt;
+	
+&lt;depends&gt;jboss:service=TransactionManager&lt;/depends&gt;
+	
+&lt;!-- Attributes common to HiLo factory instances --&gt;
+	
+&lt;!-- DataSource JNDI name --&gt;
+&lt;depends optional-attribute-name="DataSource"&gt;jboss.jca:service=DataSourceBinding,name=DefaultDS&lt;/depends&gt;
+	
+&lt;!-- table name --&gt;
+&lt;attribute name="TableName"&gt;HILOSEQUENCES&lt;/attribute&gt;</programlisting>
+
+
+  </section>
+
+<section><title>DataSource configuration</title>
+
+  <para>
+	  DataSources are defined inside a &lt;datasources&gt; element.
+  </para>
+  <itemizedlist>
+	  <listitem>
+		  <para>
+			  &lt;no-tx-datasource&gt; - a DataSource that does not take part in JTA transactions using a java.sql.Driver 
+		  </para>
+	  </listitem>
+	  <listitem>
+		  <para>
+			  &lt;local-tx-datasource&gt; - a DataSource that does not support two phase commit using a java.sql.Driver 
+		  </para>
+	  </listitem>
+	  <listitem>
+		  <para>
+			  &lt;xa-datasource&gt; - a DataSource that does support two phase commit using a javax.sql.XADataSource
+		  </para>
+	  </listitem>
+  </itemizedlist>
+
+</section>
+
+  <section><title>Parameters specific for java.sql.Driver usage</title>
+<para>		  
+<itemizedlist>
+	  <listitem>
+		  <para>
+			  &lt;connection-url&gt; - the JDBC driver connection url string 
+		  </para>
+	  </listitem>
+	  <listitem>
+		  <para>
+			  &lt;driver-class&gt; - the JDBC driver class implementing java.sql.Driver 
+		  </para>
+	  </listitem>
+	  <listitem>
+		  <para>
+			  &lt;connection-property&gt; - used to configure the connections retrieved from the java.sql.Driver. For example:
+		  </para>
+	  </listitem>
+	  </itemizedlist>
+  </para>
+  
+<programlisting role="XML">&lt;connection-property name="char.encoding"&gt;UTF-8&lt;/connection-property&gt;</programlisting>
+		  
+
+</section>
+
+  <section>
+	  <title>Parameters specific for javax.sql.XADataSource usage</title>
+		  
+	  <itemizedlist>
+		  <listitem>
+			  <para>
+				  &lt;xa-datasource-class&gt; - the class implementing the XADataSource
+			  </para>
+		  </listitem>
+		  <listitem>
+			  <para> 
+				  &lt;xa-datasource-property&gt; - properties used to configure the XADataSource. For example:
+			  </para>
+		  </listitem>
+	  </itemizedlist>
+			  
+<programlisting role="XML">&lt;xa-datasource-property name="IfxWAITTIME"&gt;10&lt;/xa-datasource-property&gt;
+&lt;xa-datasource-property name="IfxIFXHOST"&gt;myhost.mydomain.com&lt;/xa-datasource-property&gt;
+&lt;xa-datasource-property name="PortNumber"&gt;1557&lt;/xa-datasource-property&gt;
+&lt;xa-datasource-property name="DatabaseName"&gt;mydb&lt;/xa-datasource-property&gt;
+&lt;xa-datasource-property name="ServerName"&gt;myserver&lt;/xa-datasource-property&gt;
+</programlisting>
+			  
+<itemizedlist>
+	<listitem>
+		<para>
+  		&lt;isSameRM-override-value&gt; - set to false to fix problems with Oracle
+		</para>
+	</listitem>
+	<listitem>
+		<para>
+		&lt;track-connection-by-tx/&gt; - set to fix problems with Oracle (not necessarily in JBoss-5.x where it is enabled by default and the element is deprecated)
+		</para>
+	</listitem>
+	<listitem>
+		<para>
+		&lt;no-tx-separate-pools/&gt; - Pool Transactional and non-Transactional connections separately. Using this option will cause your total pool size to be twice max-pool-size because two actual pools will be created. Used to fix problems with Oracle. 
+		</para>
+	</listitem>
+</itemizedlist>
+</section>
+
+<section>
+	  <title>Common DataSource parameters</title>
+			  
+  <itemizedlist>
+	  <listitem>
+		  <para>
+		  &lt;jndi-name&gt; - the JNDI name under which the DataSource should be bound.
+		</para>
+	  </listitem>
+	  <listitem>
+		  <para>
+		  &lt;use-java-context&gt; - A boolean indicating if the jndi-name should be prefixed with java: which causes the DataSource to only be accessible from within the jboss server vm. The default is true.
+		  </para>
+	  </listitem>
+	  <listitem>
+		  <para>
+		  &lt;user-name&gt; - the user name used when creating the connection (not used when security is configured)
+		  </para>
+	  </listitem>
+	  <listitem>
+		  <para>
+		  &lt;password&gt; - the password used when creating the connection (not used when security is configured)
+		  </para>
+	  </listitem>
+	  <listitem>
+		  <para>
+		  &lt;transaction-isolation&gt; - the default transaction isolation of the connection (unspecified means use the default provided by the database):
+ <itemizedlist>
+	<listitem>
+		  <para>
+			TRANSACTION_READ_UNCOMMITTED
+		</para>
+	</listitem>
+	<listitem>
+		<para>
+		TRANSACTION_READ_COMMITTED
+		</para>
+	</listitem>
+	<listitem>
+		<para>
+		TRANSACTION_REPEATABLE_READ
+		</para>
+	</listitem>
+	<listitem>
+		<para>
+		TRANSACTION_SERIALIZABLE
+		</para>
+	</listitem>
+	<listitem>
+		<para>
+		TRANSACTION_NONE
+		</para>
+	</listitem>
+		</itemizedlist>
+	</para>
+		</listitem>
+		
+		<listitem>
+			<para>
+			&lt;new-connection-sql&gt; - an sql statement that is executed against each new connection. This can be used to set the connection schema, etc.
+			</para>
+		</listitem>
+		<listitem>
+			<para>
+			&lt;check-valid-connection-sql&gt; - an sql statement that is executed before it is checked out from the pool to make sure it is still valid. If the sql fails, the connection is closed and new ones created.
+			</para>
+		</listitem>
+		<listitem>
+			<para>
+			&lt;valid-connection-checker-class-name&gt; - a class that can check whether a connection is valid using a vendor specific mechanism
+			</para>
+		</listitem>
+		<listitem>
+			<para>
+			&lt;exception-sorter-class-name&gt; - a class that looks at vendor specific messages to determine whether sql errors are fatal and thus the connection should be destroyed. If none specified, no errors will be treated as fatal.
+			</para>
+		</listitem>
+		<listitem>
+			<para>
+			&lt;track-statements&gt; - (a) whether to monitor for unclosed Statements and ResultSets and issue warnings when the user forgets to close them (default nowarn)
+			</para>
+		</listitem>
+		<listitem>
+			<para>
+			&lt;prepared-statement-cache-size&gt; - the number of prepared statements per connection to be kept open and reused in subsequent requests. They are stored in a LRU cache. The default is 0 (zero), meaning no cache.
+			</para>
+		</listitem>
+			<listitem>
+				<para>
+				&lt;share-prepared-statements&gt; - (b) with prepared statement cache enabled whether two requests in the same transaction should return the same statement (from jboss-4.0.2 - default false).
+				</para>
+		</listitem>
+		<listitem>
+			<para>
+			&lt;set-tx-query-timeout&gt; - whether to enable query timeout based on the length of time remaining until the transaction times out (default false - NOTE: This was NOT ported to 4.0.x until 4.0.3)
+			</para>
+		</listitem>
+		<listitem>
+			<para>
+				&lt;query-timeout&gt; - a static configuration of the maximum of seconds before a query times out (since 4.0.3)
+			</para>
+		</listitem>
+			<listitem>
+				<para>
+				&lt;metadata/typemapping&gt; - a pointer to the type mapping in conf/standardjbosscmp.xml  (available from JBoss 4 and above)
+				</para>
+			</listitem>
+			<listitem>
+				<para>
+				&lt;validate-on-match&gt; - Prior to JBoss 4.0.5, connection validation occurred when the JCA layer attempted to match a managed connection. With the addition of &lt;background-validation&gt; this is no longer required. Specifying &lt;validate-on-match&gt; forces the old behavior. NOTE: this is typically NOT used in conjunction with &lt;background-validation&gt;
+				</para>
+			</listitem>
+			<listitem>
+				<para> 
+				&lt;prefill&gt; - whether to attempt to prefill the connection pool to the minimum number of connections. NOTE: only supporting pools (OnePool) support this feature. A warning can be found in the logs if the pool does not support this. This feature will appear in JBoss 4.0.5.
+				</para>
+			</listitem>
+			<listitem>
+				<para>
+				&lt;background-validation&gt; - In JBoss 4.0.5, background connection validation as been added to reduce the overall load on the RDBMS system when validating a connection. When using this feature, JBoss will attempt to validate the current connections in the pool is a seperate thread (ConnectionValidator). Default is False.
+				</para>
+			</listitem>
+			<listitem>
+				<para>
+				&lt;idle-timeout-minutes&gt; - indicates the maximum time a connection may be idle before being closed. Default is 15 minutes.
+				</para>
+			</listitem>
+			<listitem>
+				<para>
+				&lt;background-validation-minutes&gt; - The interval, in minutes, that the ConnectionValidator will run. Default is 10 minutes. NOTE: It is prudent to set this value to something greater or less than the &lt;idle-timeout-minutes&gt;
+				</para>
+			</listitem>
+			<listitem>
+				<para>
+				&lt;url-delimiter&gt; - From JBoss5 database failover is part of the main datasource config
+				</para>
+			</listitem>
+			<listitem>
+				<para>
+				&lt;url-property&gt; - From JBoss5 database failover is part of the main datasource config
+				</para>
+			</listitem>
+			<listitem>
+				<para>
+				&lt;url-selector-strategy-class-name&gt; - From JBoss5 ONLY database failover is part of the main datasource config
+				</para>
+			</listitem>
+			<listitem>
+				<para>
+				&lt;stale-connection-checker-class-name&gt; - An implementation of org.jboss.resource.adapter.jdbc.StateConnectionChecker that will decide whether SQLExceptions that notify of bad connections throw org.jboss.resource.adapter.jdbc.StateConnectionException (from JBoss5) 
+				</para>
+			</listitem>
+		</itemizedlist>
+				
+	<para>
+	From JBoss AS 3.2.6 and above, <literal>track-statements</literal> has a new option:
+	</para>
+<programlisting role="XML">&lt;track-statements&gt;nowarn&lt;/track-statements</programlisting>
+
+<para>This option closes Statements and ResultSets without a warning. It is also the new default value.</para>
+				
+	<para>
+		The purpose is to workaround questionable driver behavior where the driver applies auto-commit semantics to local transactions. 
+	</para>					
+<programlisting role="JAVA">Connection c = dataSource.getConnection(); // auto-commit == false
+PreparedStatement ps1 = c.prepareStatement(...);
+ResultSet rs1 = ps1.executeQuery();
+PreparedStatement ps2 = c.prepareStatement(...);
+ResultSet rs2 = ps2.executeQuery();</programlisting>
+					
+		<para>			
+			Assuming the prepared statements are the same. For some drivers, ps2.executeQuery() will automatically close rs1 so we actually need two real prepared statements behind the scenes. This *should* only be for the auto-commit semantic where re-running the query starts a new transaction automatically. For drivers that follow the spec, you can set it to true to share the same real prepared statement. 
+		</para>
+</section>
+			
+			
+<section><title>Generic Datasource Sample</title>
+				
+<programlisting role="XML">&lt;datasources&gt;
+&lt;local-tx-datasource&gt;
+&lt;jndi-name&gt;GenericDS&lt;/jndi-name&gt;
+&lt;connection-url&gt;[jdbc: url for use with Driver class]&lt;/connection-url&gt;
+&lt;driver-class&gt;[fully qualified class name of java.sql.Driver implementation]&lt;/driver-class&gt;
+&lt;user-name&gt;x&lt;/user-name&gt;
+&lt;password&gt;y&lt;/password&gt;
+&lt;!-- you can include connection properties that will get passed in 
+the DriverManager.getConnection(props) call--&gt;
+&lt;!-- look at your Driver docs to see what these might be --&gt;
+&lt;connection-property name="char.encoding"&gt;UTF-8&lt;/connection-property&gt;
+&lt;transaction-isolation&gt;TRANSACTION_SERIALIZABLE&lt;/transaction-isolation&gt;
+	
+&lt;!--pooling parameters--&gt;
+&lt;min-pool-size&gt;5&lt;/min-pool-size&gt;
+&lt;max-pool-size&gt;100&lt;/max-pool-size&gt;
+&lt;blocking-timeout-millis&gt;5000&lt;/blocking-timeout-millis&gt;
+&lt;idle-timeout-minutes&gt;15&lt;/idle-timeout-minutes&gt;
+&lt;!-- sql to call when connection is created
+&lt;new-connection-sql&gt;some arbitrary sql&lt;/new-connection-sql&gt;
+--&gt;
+					
+&lt;!-- sql to call on an existing pooled connection when it is obtained from pool 
+&lt;check-valid-connection-sql&gt;some arbitrary sql&lt;/check-valid-connection-sql&gt;
+--&gt;
+					
+&lt;set-tx-query-timeout/&gt;
+&lt;query-timeout&gt;300&lt;/query-timeout&gt; &lt;!-- maximum of 5 minutes for queries --&gt;
+	
+&lt;!-- pooling criteria.  USE AT MOST ONE--&gt;
+&lt;!--  If you don't use JAAS login modules or explicit login 
+getConnection(usr,pw) but rely on user/pw specified above, 
+don't specify anything here --&gt;
+
+&lt;!-- If you supply the usr/pw from a JAAS login module --&gt;
+&lt;security-domain&gt;MyRealm&lt;/security-domain&gt;
+					
+&lt;!-- if your app supplies the usr/pw explicitly getConnection(usr, pw) --&gt;
+&lt;application-managed-security/&gt;
+
+&lt;!--Anonymous depends elements are copied verbatim into the ConnectionManager mbean config--&gt;
+&lt;depends&gt;myapp.service:service=DoSomethingService&lt;/depends&gt;
+					
+&lt;/local-tx-datasource&gt;
+					
+&lt;!-- you can include regular mbean configurations like this one --&gt;
+&lt;mbean code="org.jboss.tm.XidFactory" 
+name="jboss:service=XidFactory"&gt;
+&lt;attribute name="Pad"&gt;true&lt;/attribute&gt;
+&lt;/mbean&gt;
+
+&lt;!-- Here's an xa example --&gt;
+&lt;xa-datasource&gt;
+&lt;jndi-name&gt;GenericXADS&lt;/jndi-name&gt;
+&lt;xa-datasource-class&gt;[fully qualified name of class implementing javax.sql.XADataSource goes here]&lt;/xa-datasource-class&gt;
+&lt;xa-datasource-property name="SomeProperty"&gt;SomePropertyValue&lt;/xa-datasource-property&gt;
+&lt;xa-datasource-property name="SomeOtherProperty"&gt;SomeOtherValue&lt;/xa-datasource-property&gt;
+
+&lt;user-name&gt;x&lt;/user-name&gt;
+&lt;password&gt;y&lt;/password&gt;
+&lt;transaction-isolation&gt;TRANSACTION_SERIALIZABLE&lt;/transaction-isolation&gt;
+
+&lt;!--pooling parameters--&gt;
+&lt;min-pool-size&gt;5&lt;/min-pool-size&gt;
+&lt;max-pool-size&gt;100&lt;/max-pool-size&gt;
+&lt;blocking-timeout-millis&gt;5000&lt;/blocking-timeout-millis&gt;
+&lt;idle-timeout-minutes&gt;15&lt;/idle-timeout-minutes&gt;
+&lt;!-- sql to call when connection is created
+&lt;new-connection-sql&gt;some arbitrary sql&lt;/new-connection-sql&gt;
+--&gt;
+
+&lt;!-- sql to call on an existing pooled connection when it is obtained from pool 
+&lt;check-valid-connection-sql&gt;some arbitrary sql&lt;/check-valid-connection-sql&gt;
+--&gt;
+
+&lt;!-- pooling criteria.  USE AT MOST ONE--&gt;
+&lt;!--  If you don't use JAAS login modules or explicit login 
+getConnection(usr,pw) but rely on user/pw specified above, 
+don't specify anything here --&gt;
+
+&lt;!-- If you supply the usr/pw from a JAAS login module --&gt;
+&lt;security-domain/&gt;
+
+&lt;!-- if your app supplies the usr/pw explicitly getConnection(usr, pw) --&gt;
+&lt;application-managed-security/&gt;
+
+&lt;/xa-datasource&gt;
+
+&lt;/datasources&gt;</programlisting>
+				
+		</section>
+			
+			
+<section>
+	<title>Configuring a DataSource for remote usage</title>
+<para>
+	From JBoss-4.0.0 and above, there is support for accessing a DataSource from a remote client. The one change that is necessary for the client to be able to lookup the DataSource from JNDI is to specify use-java-context=false as shown here: 
+</para>
+<programlisting role="XML">&lt;datasources&gt;
+&lt;local-tx-datasource&gt;
+&lt;jndi-name&gt;GenericDS&lt;/jndi-name&gt;
+&lt;use-java-context&gt;false&lt;/use-java-context&gt;
+&lt;connection-url&gt;...&lt;/connection-url&gt;
+</programlisting>
+				
+	<para>
+		This results in the DataSource being bound under the JNDI name "GenericDS" instead of the default of "java:/GenericDS" which restricts the lookup to the same VM as the jboss server. 
+	</para>
+<note><title>Note</title>
+<para>JBoss does not recommend using this feature on a production environment. It requires accessing a connection pool remotely and this is an anti-pattern as connections are not serializable. Besides, transaction propagation is not supported and it could lead to connection leaks if the remote clients are unreliable (i.e crashes, network failure). If you do need to access a datasource remotely, JBoss recommends accessing it via a remote session bean facade.</para>
+</note>
+
+</section>
+		
+		
+<section><title>Configuring a DataSource to use login modules</title>
+	<para>
+		Add the security-domain parameter to the *-ds.xml file.
+	</para>
+			
+<programlisting role="XML">&lt;datasources&gt;
+&lt;local-tx-datasource&gt;
+...
+&lt;security-domain&gt;MyDomain&lt;/security-domain&gt;
+...
+&lt;/local-tx-datasource&gt;
+&lt;/datasources&gt;
+</programlisting>
+			
+	<para>
+		Add an application-policy to the login-config.xml file. The authentication section should include the configuration for your login-module. For example, if you want to encrypt the database password, use the SecureIdentityLoginModule login module. 
+	</para>			
+			
+<programlisting role="XML">&lt;application-policy name="MyDomain"&gt;
+&lt;authentication&gt;
+&lt;login-module code="org.jboss.resource.security.SecureIdentityLoginModule" flag="required"&gt;
+&lt;module-option name="username"&gt;scott&lt;/module-option&gt;
+&lt;module-option name="password"&gt;-170dd0fbd8c13748&lt;/module-option&gt;
+&lt;module-option name="managedConnectionFactoryName"&gt;jboss.jca:service=LocalTxCM,name=OracleDSJAAS&lt;/module-option&gt;
+&lt;/login-module&gt;
+&lt;/authentication&gt;
+&lt;/application-policy&gt;</programlisting>
+			
+	<para>
+	In case you plan to fetch the data source connection from a web application, make sure authentication is turned on for the web application. This is in order for the Subject to be populated. If you wish for users to be able to connect anonymously, an additional login module needs to be added to the application-policy, in order to populate the security credentials. Add the UsersRolesLoginModule as the first login module in the chain. The usersProperties and rolesProperties parameters can be directed to dummy files. 
+	</para>		
+			
+<programlisting role="XML">&lt;login-module code="org.jboss.security.auth.spi.UsersRolesLoginModule" flag="required"&gt;
+&lt;module-option name="unauthenticatedIdentity"&gt;nobody&lt;/module-option&gt;
+&lt;module-option name="usersProperties"&gt;props/users.properties&lt;/module-option&gt;
+&lt;module-option name="rolesProperties"&gt;props/roles.properties&lt;/module-option&gt;
+&lt;/login-module&gt;  	  
+</programlisting>			
+
+</section>
+		
+ 
+  
+  
+</chapter>

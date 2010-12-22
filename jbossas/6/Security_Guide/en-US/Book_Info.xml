@@ -1,0 +1,17 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE bookinfo PUBLIC "-//OASIS//DTD DocBook XML V4.3//EN" "http://www.oasis-open.org/docbook/xml/4.3/docbookx.dtd" [ ]>
+
+<bookinfo>
+<title>JBoss AS 6.0 Security Guide</title>
+	<subtitle>Security with JBoss Application Server 6</subtitle>
+	<productname>JBoss Application Server</productname>
+	<productnumber>6.0</productnumber>
+	<pubdate>Sep 2010</pubdate>
+	<abstract>
+		<para>
+			This book is the JBoss Application Server 6 Security Guide.
+		</para>
+	</abstract>
+	<!-- <subtitle>Authors</subtitle>-->
+	<xi:include href="Author_Group.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+</bookinfo>

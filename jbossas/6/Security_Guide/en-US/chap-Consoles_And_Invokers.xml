@@ -1,0 +1,523 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd">
+<chapter id="chap-Consoles_and_Invokers">
+  <title>Consoles and Invokers</title>
+  <para>
+   JBoss AS ships with several administrative access points that must be secured or removed to prevent unauthorized access to administrative functions in a deployment. This chapter discusses the various administration services and how to secure them.
+  </para>
+  <section id="sect-The_JMX_Console">
+    <title>JMX Console</title>
+    <para>
+    The <filename>jmx-console.war</filename> found in the <filename>deploy</filename> directory provides an HTML view into the JMX Microkernel. As such, it provides access to administrative actions like shutting down the server, stopping services, deploying new services, etc. It should either be secured like any other web application, or removed.
+   </para>
+  </section>
+  <section id="How_to_Secure_the_JBoss_Server-The_Web_Console">
+    <title>Admin Console</title>
+    <para>
+    The Admin Console replaces the Web Console, and uses JBoss Operations Network security elements to secure the console. For more information, refer to the <citetitle>JBoss Admin Console Quick Start User Guide</citetitle>. </para>
+  </section>
+  <section id="How_to_Secure_the_JBoss_Server-The_HTTP_Invokers">
+    <title>HTTP Invokers</title>
+    <para>
+    The <filename>http-invoker.sar</filename> found in the <filename>deploy</filename> directory is a service that provides RMI/HTTP access for EJBs and the JNDI <literal>Naming</literal> service. This includes a servlet that processes posts of marshaled <literal>org.jboss.invocation.Invocation</literal> objects that represent invocations that should be dispatched onto the <literal>MBeanServer</literal>. Effectively this allows access to MBeans that support the detached invoker operation via HTTP POST requests. Securing this access point involves securing the <literal>JMXInvokerServlet</literal> servlet found in the <filename>http-invoker.sar/invoker.war/WEB-INF/web.xml</filename> descriptor. There is a secure mapping defined for the <filename>/restricted/JMXInvokerServlet</filename> path by default. Remove the other paths and configure the <literal>http-invoker</literal> security domain setup in the <filename>http-invoker.sar/invoker.war/WEB-INF/jboss-web.xml</filename> deployment descriptor.
+   </para>
+    <para>
+      <note>
+        <para>
+See the <citetitle>Admin Console Quick Start Guide</citetitle> for in-depth information on securing the HTTP invoker.
+        </para>
+      </note>
+    </para>
+  </section>
+  <section id="How_to_Secure_the_JBoss_Server-The_JMX_Invoker">
+    <title>JMX Invoker</title>
+    <para>
+    The <filename>jmx-invoker-service.xml</filename> is a configuration file  that exposes the JMX MBeanServer interface via an RMI compatible interface using the RMI/JRMP detached invoker service.   </para>
+  </section>
+  <section id="Remote_Access_to_Services_Detached_Invokers">
+    <title>Remote Access to Services, Detached Invokers</title>
+    <para>
+   In addition to the MBean services notion that allows for the ability to integrate arbitrary functionality, JBoss also has a detached invoker concept that allows MBean services to expose functional interfaces via arbitrary protocols for remote access by clients. The notion of a detached invoker is that remoting and the protocol by which a service is accessed is a functional aspect or service independent of the component. Therefore, you can make a naming service available for use via RMI/JRMP, RMI/HTTP, RMI/SOAP, or any arbitrary custom transport.
+  </para>
+    <para>
+   The discussion of the detached invoker architecture will begin with an overview of the components involved. The main components in the detached invoker architecture are shown in <xref linkend="Remote_Access_to_Services_Detached_Invokers-The_main_components_in_the_detached_invoker_architecture"/>.
+  </para>
+    <figure id="Remote_Access_to_Services_Detached_Invokers-The_main_components_in_the_detached_invoker_architecture">
+      <title>The main components in the detached invoker architecture</title>
+      <mediaobject>
+        <imageobject>
+          <imagedata align="center" fileref="images/j2ee_chap2-47.jpg"/>
+        </imageobject>
+      </mediaobject>
+    </figure>
+    <para>
+   On the client side, there exists a client proxy which exposes the interface(s) of the MBean service. This is the same smart, compile-less dynamic proxy that is used for EJB home and remote interfaces. The only difference between the proxy for an arbitrary service and the EJB is the set of interfaces exposed as well as the client side interceptors found inside the proxy. The client interceptors are represented by the rectangles found inside of the client proxy. An interceptor is an assembly line type of pattern that allows for transformation of a method invocation and/or return values. A client obtains a proxy through some lookup mechanism, typically JNDI. Although RMI is indicated in <xref linkend="Remote_Access_to_Services_Detached_Invokers-The_main_components_in_the_detached_invoker_architecture"/>, the only real requirement on the exposed interface and its types is that they are serializable between the client server over JNDI as well as the transport layer.
+  </para>
+    <para>
+   The choice of the transport layer is determined by the last interceptor in the client proxy, which is referred to as the <emphasis>Invoker Interceptor</emphasis> in <xref linkend="Remote_Access_to_Services_Detached_Invokers-The_main_components_in_the_detached_invoker_architecture"/>. The invoker interceptor contains a reference to the transport specific stub of the server side <emphasis>Detached Invoker</emphasis> MBean service. The invoker interceptor also handles the optimization of calls that occur within the same VM as the target MBean. When the invoker interceptor detects that this is the case the call is passed to a call-by-reference invoker that simply passes the invocation along to the target MBean.
+  </para>
+    <para>
+   The detached invoker service is responsible for making a generic invoke operation available via the transport the detached invoker handles. The <literal>Invoker</literal> interface illustrates the generic invoke operation.
+  </para>
+    <programlisting language="Java">
+package org.jboss.invocation;
+            
+import java.rmi.Remote;
+import org.jboss.proxy.Interceptor;
+import org.jboss.util.id.GUID;
+            
+            
+public interface Invoker
+    extends Remote
+{
+    GUID ID = new GUID();
+
+    String getServerHostName() throws Exception;
+
+    Object invoke(Invocation invocation) throws Exception;
+}
+</programlisting>
+    <para>
+   The Invoker interface extends <literal>Remote</literal> to be compatible with RMI, but this does not mean that an invoker must expose an RMI service stub. The detached invoker service simply acts as a transport gateway that accepts invocations represented as the <literal>org.jboss.invocation.Invocation</literal> object over its specific transport, unmarshalls the invocation, forwards the invocation onto the destination MBean service, represented by the <emphasis>Target MBean</emphasis> in <xref linkend="Remote_Access_to_Services_Detached_Invokers-The_main_components_in_the_detached_invoker_architecture"/>, and marshalls the return value or exception resulting from the forwarded call back to the client.
+  </para>
+    <para>
+   The <literal>Invocation</literal> object is just a representation of a method invocation context. This includes the target MBean name, the method, the method arguments, a context of information associated with the proxy by the proxy factory, and an arbitrary map of data associated with the invocation by the client proxy interceptors.
+  </para>
+    <para>
+   The configuration of the client proxy is done by the server side proxy factory MBean service, indicated by the <emphasis>Proxy Factory</emphasis> component in <xref linkend="Remote_Access_to_Services_Detached_Invokers-The_main_components_in_the_detached_invoker_architecture"/>. The proxy factory performs the following tasks:
+  </para>
+    <itemizedlist>
+      <listitem>
+        <para>
+     Create a dynamic proxy that implements the interface the target MBean wishes to expose.
+    </para>
+      </listitem>
+      <listitem>
+        <para>
+     Associate the client proxy interceptors with the dynamic proxy handler.
+    </para>
+      </listitem>
+      <listitem>
+        <para>
+     Associate the invocation context with the dynamic proxy. This includes the target MBean, detached invoker stub and the proxy JNDI name.
+    </para>
+      </listitem>
+      <listitem>
+        <para>
+     Make the proxy available to clients by binding the proxy into JNDI.
+    </para>
+      </listitem>
+    </itemizedlist>
+    <para>
+   The last component in <xref linkend="Remote_Access_to_Services_Detached_Invokers-The_main_components_in_the_detached_invoker_architecture"/> is the <emphasis>Target MBean</emphasis> service that wishes to expose an interface for invocations to remote clients. The steps required for an MBean service to be accessible through a given interface are:
+  </para>
+    <itemizedlist>
+      <listitem>
+        <para>
+     Define a JMX operation matching the signature: <literal>public Object invoke(org.jboss.invocation.Invocation) throws Exception</literal>
+    </para>
+      </listitem>
+      <listitem>
+        <para>
+     Create a <literal>HashMap&lt;Long, Method&gt;</literal> mapping from the exposed interface <literal>java.lang.reflect.Method</literal>s to the long hash representation using the <literal>org.jboss.invocation.MarshalledInvocation.calculateHash</literal> method.
+    </para>
+      </listitem>
+      <listitem>
+        <para>
+     Implement the <literal>invoke(Invocation)</literal> JMX operation and use the interface method hash mapping to transform from the long hash representation of the invoked method to the <literal>java.lang.reflect.Method</literal> of the exposed interface. Reflection is used to perform the actual invocation on the object associated with the MBean service that actually implements the exposed interface.
+    </para>
+      </listitem>
+    </itemizedlist>
+    <section id="Remote_Access_to_Services_Detached_Invokers-A_Detached_Invoker_Example_the_MBeanServer_Invoker_Adaptor_Service">
+      <title>A Detached Invoker Example, the MBeanServer Invoker Adaptor Service</title>
+      <para>
+This section presents the <literal>org.jboss.jmx.connector.invoker.InvokerAdaptorService</literal> and its configuration for access via RMI/JRMP as an example of the steps required to provide remote access to an MBean service.
+   </para>
+      <example id="A_Detached_Invoker_Example_the_MBeanServer_Invoker_Adaptor_Service-The_InvokerAdaptorService_MBean">
+        <title>The InvokerAdaptorService MBean</title>
+        <para>
+    The <literal>InvokerAdaptorService</literal> is a simple MBean service that  exists to fulfill the target MBean role in the detached invoker pattern.
+   </para>
+        <programlisting language="Java">package org.jboss.jmx.connector.invoker;
+public interface InvokerAdaptorServiceMBean
+    extends org.jboss.system.ServiceMBean
+{
+    Class getExportedInterface();
+    void setExportedInterface(Class exportedInterface);
+
+    Object invoke(org.jboss.invocation.Invocation invocation)
+        throws Exception;
+}
+
+package org.jboss.jmx.connector.invoker;
+
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.UndeclaredThrowableException;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+
+import javax.management.MBeanServer;
+import javax.management.ObjectName;
+
+import org.jboss.invocation.Invocation;
+import org.jboss.invocation.MarshalledInvocation;
+import org.jboss.mx.server.ServerConstants;
+import org.jboss.system.ServiceMBeanSupport;
+import org.jboss.system.Registry;
+
+public class InvokerAdaptorService
+    extends ServiceMBeanSupport
+    implements InvokerAdaptorServiceMBean, ServerConstants
+{
+    private static ObjectName mbeanRegistry;
+    
+    static {
+        try {
+            mbeanRegistry = new ObjectName(MBEAN_REGISTRY);
+        } catch (Exception e) {
+            throw new RuntimeException(e.toString());
+        }
+    }
+
+    private Map marshalledInvocationMapping = new HashMap();
+    private Class exportedInterface;
+
+    public Class getExportedInterface()
+    {
+        return exportedInterface;
+    }
+
+    public void setExportedInterface(Class exportedInterface)
+    {
+        this.exportedInterface = exportedInterface;
+    }
+
+    protected void startService()
+        throws Exception
+    {
+        // Build the interface method map
+        Method[] methods = exportedInterface.getMethods();
+        HashMap tmpMap = new HashMap(methods.length);
+        for (int m = 0; m &lt; methods.length; m ++) {
+            Method method = methods[m];
+            Long hash = new Long(MarshalledInvocation.calculateHash(method));
+            tmpMap.put(hash, method);
+        }
+
+        marshalledInvocationMapping = Collections.unmodifiableMap(tmpMap);
+        // Place our ObjectName hash into the Registry so invokers can
+        // resolve it
+        Registry.bind(new Integer(serviceName.hashCode()), serviceName);
+    }
+
+    protected void stopService()
+        throws Exception
+    {
+        Registry.unbind(new Integer(serviceName.hashCode()));
+    }
+
+
+    public Object invoke(Invocation invocation)
+        throws Exception
+    {
+        // Make sure we have the correct classloader before unmarshalling
+        Thread thread = Thread.currentThread();
+        ClassLoader oldCL = thread.getContextClassLoader();
+
+        // Get the MBean this operation applies to
+        ClassLoader newCL = null;
+        ObjectName objectName = (ObjectName) 
+            invocation.getValue(&quot;JMX_OBJECT_NAME&quot;);
+        if (objectName != null) {
+            // Obtain the ClassLoader associated with the MBean deployment
+            newCL = (ClassLoader) 
+                server.invoke(mbeanRegistry, &quot;getValue&quot;,
+                              new Object[] { objectName, CLASSLOADER },
+                              new String[] { ObjectName.class.getName(),
+                                             &quot;java.lang.String&quot; });
+        }
+        
+        if (newCL != null &amp;&amp; newCL != oldCL) {
+            thread.setContextClassLoader(newCL);
+        }
+
+        try {
+            // Set the method hash to Method mapping
+            if (invocation instanceof MarshalledInvocation) {
+                MarshalledInvocation mi = (MarshalledInvocation) invocation;
+                mi.setMethodMap(marshalledInvocationMapping);
+            }
+
+            // Invoke the MBeanServer method via reflection
+            Method method = invocation.getMethod();
+            Object[] args = invocation.getArguments();
+            Object value = null;
+            try {
+                String name = method.getName();
+                Class[] sig = method.getParameterTypes();
+                Method mbeanServerMethod =
+                    MBeanServer.class.getMethod(name, sig);
+                value = mbeanServerMethod.invoke(server, args);
+            } catch(InvocationTargetException e) {
+                Throwable t = e.getTargetException();
+                if (t instanceof Exception) {
+                    throw (Exception) t;
+                } else {
+                    throw new UndeclaredThrowableException(t, method.toString());
+                }
+            }
+
+            return value;
+        } finally {
+            if (newCL != null &amp;&amp; newCL != oldCL) {
+                thread.setContextClassLoader(oldCL);
+            }
+        }
+    }
+}    
+</programlisting>
+      </example>
+      <para>To help understand the components that make up the <literal>InvokerAdaptorServiceMBean</literal>, the code has been split into logical blocks, with commentary about how each block interoperates.</para>
+      <example>
+        <title>Block One</title>
+        <programlisting language="Java">package org.jboss.jmx.connector.invoker;
+public interface InvokerAdaptorServiceMBean
+    extends org.jboss.system.ServiceMBean
+{
+    Class getExportedInterface();
+    void setExportedInterface(Class exportedInterface);
+
+    Object invoke(org.jboss.invocation.Invocation invocation)
+        throws Exception;
+}
+
+package org.jboss.jmx.connector.invoker;
+
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.UndeclaredThrowableException;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+
+import javax.management.MBeanServer;
+import javax.management.ObjectName;
+
+import org.jboss.invocation.Invocation;
+import org.jboss.invocation.MarshalledInvocation;
+import org.jboss.mx.server.ServerConstants;
+import org.jboss.system.ServiceMBeanSupport;
+import org.jboss.system.Registry;
+
+public class InvokerAdaptorService
+    extends ServiceMBeanSupport
+    implements InvokerAdaptorServiceMBean, ServerConstants
+{
+    private static ObjectName mbeanRegistry;
+    
+    static {
+        try {
+            mbeanRegistry = new ObjectName(MBEAN_REGISTRY);
+        } catch (Exception e) {
+            throw new RuntimeException(e.toString());
+        }
+    }
+
+    private Map marshalledInvocationMapping = new HashMap();
+    private Class exportedInterface;
+
+    public Class getExportedInterface()
+    {
+        return exportedInterface;
+    }
+
+    public void setExportedInterface(Class exportedInterface)
+    {
+        this.exportedInterface = exportedInterface;
+    }
+...</programlisting>
+        <para> The <literal>InvokerAdaptorServiceMBean</literal> Standard MBean interface of the <literal>InvokerAdaptorService</literal> has a single <literal>ExportedInterface</literal> attribute and a single <literal>invoke(Invocation)</literal> operation. </para>
+        <variablelist>
+          <varlistentry>
+            <term>
+              <literal>ExportedInterface</literal>
+            </term>
+            <listitem>
+              <para>The  attribute allows customization of the type of interface the service exposes to clients. This must be compatible with the <literal>MBeanServer</literal> class in terms of method name and signature. </para>
+            </listitem>
+          </varlistentry>
+          <varlistentry>
+            <term>
+              <literal>invoke(Invocation)</literal>
+            </term>
+            <listitem>
+              <para>The operation is the required entry point that target MBean services must expose to participate in the detached invoker pattern. This operation is invoked by the detached invoker services that have been configured to provide access to the <literal>InvokerAdaptorService</literal>.</para>
+            </listitem>
+          </varlistentry>
+        </variablelist>
+      </example>
+      <example id="exam-Block_2">
+        <title>Block Two</title>
+        <programlisting language="Java">    protected void startService()
+        throws Exception
+    {
+        // Build the interface method map
+        Method[] methods = exportedInterface.getMethods();
+        HashMap tmpMap = new HashMap(methods.length);
+        for (int m = 0; m &amp;lt; methods.length; m ++) {
+            Method method = methods[m];
+            Long hash = new Long(MarshalledInvocation.calculateHash(method));
+            tmpMap.put(hash, method);
+        }
+
+        marshalledInvocationMapping = Collections.unmodifiableMap(tmpMap);
+        // Place our ObjectName hash into the Registry so invokers can
+        // resolve it
+        Registry.bind(new Integer(serviceName.hashCode()), serviceName);
+    }
+    protected void stopService()
+        throws Exception
+    {
+        Registry.unbind(new Integer(serviceName.hashCode()));
+    }</programlisting>
+        <para>This code block builds the HashMap&lt;Long, Method&gt; of the <classname>exportedInterface</classname> Class using the <methodname>org.jboss.invocation.MarshalledInvocation.calculateHash(Method)</methodname> utility method. </para>
+        <para>Because <literal>java.lang.reflect.Method</literal> instances are not serializable, a <literal>MarshalledInvocation</literal> version of the non-serializable <literal>Invocation</literal> class is used to marshall the invocation between the client and server. The <literal>MarshalledInvocation</literal> replaces the Method instances with their corresponding hash representation. On the server side, the <literal>MarshalledInvocation</literal> must be told what the hash to Method mapping is.
+   </para>
+        <para>This code block creates a mapping between the <literal>InvokerAdaptorService</literal> service name and its hash code representation. This is used by detached invokers to determine what the target MBean <literal>ObjectName</literal> of an <literal>Invocation</literal> is. </para>
+        <para>When the target MBean name is stored in the <literal>Invocation</literal>, its store as its hashCode because <literal>ObjectName</literal>s are relatively expensive objects to create. The <literal>org.jboss.system.Registry</literal> is a global map like construct that invokers use to store the hash code to <literal>ObjectName</literal> mappings in.
+   </para>
+      </example>
+      <example>
+        <title>Block Three</title>
+        <programlisting language="Java">    public Object invoke(Invocation invocation)
+        throws Exception
+    {
+        // Make sure we have the correct classloader before unmarshalling
+        Thread thread = Thread.currentThread();
+        ClassLoader oldCL = thread.getContextClassLoader();
+
+        // Get the MBean this operation applies to
+        ClassLoader newCL = null;
+        ObjectName objectName = (ObjectName) 
+            invocation.getValue(&amp;quot;JMX_OBJECT_NAME&amp;quot;);
+        if (objectName != null) {
+            // Obtain the ClassLoader associated with the MBean deployment
+            newCL = (ClassLoader) 
+                server.invoke(mbeanRegistry, &amp;quot;getValue&amp;quot;,
+                              new Object[] { objectName, CLASSLOADER },
+                              new String[] { ObjectName.class.getName(),
+                                             &amp;quot;java.lang.String&amp;quot; });
+        }
+        
+        if (newCL != null &amp;amp;&amp;amp; newCL != oldCL) {
+            thread.setContextClassLoader(newCL);
+        }
+</programlisting>
+        <para>This code block obtains the name of the MBean on which the MBeanServer operation is being performed, and then  looks up the class loader associated with the MBean&apos;s SAR deployment. This information is available via the <classname>org.jboss.mx.server.registry.BasicMBeanRegistry</classname>, a JBoss JMX implementation-specific class. </para>
+        <para>It is generally necessary for an MBean to establish the correct class loading context because the detached invoker protocol layer may not have access to the class loaders needed to unmarshall the types associated with an invocation.
+   </para>
+      </example>
+      <example>
+        <title>Block Four</title>
+        <programlisting language="Java">...
+        try {
+            // Set the method hash to Method mapping
+            if (invocation instanceof MarshalledInvocation) {
+                MarshalledInvocation mi = (MarshalledInvocation) invocation;
+                mi.setMethodMap(marshalledInvocationMapping);
+            }
+...</programlisting>
+        <para>This code block installs the <literal>ExposedInterface</literal> class method hash to method mapping if the invocation argument is of type <literal>MarshalledInvocation</literal>. The method mapping calculated in <xref linkend="exam-Block_2"/>is used here.
+   </para>
+        <para>A second mapping is performed from the <methodname>ExposedInterface</methodname> method to the matching method of the MBeanServer class. The <literal>InvokerServiceAdaptor</literal> decouples the <literal>ExposedInterface</literal> from the <classname>MBeanServer</classname> class in that it allows an arbitrary interface. This is required because the standard <classname>java.lang.reflect.Proxy</classname> class can only proxy interfaces. It also allows you to only expose a subset of the MBeanServer methods and add transport specific exceptions such as <literal>java.rmi.RemoteException</literal> to the <literal>ExposedInterface</literal> method signatures.
+   </para>
+      </example>
+      <example>
+        <title>Block Five</title>
+        <programlisting language="Java">...
+            // Invoke the MBeanServer method via reflection
+            Method method = invocation.getMethod();
+            Object[] args = invocation.getArguments();
+            Object value = null;
+            try {
+                String name = method.getName();
+                Class[] sig = method.getParameterTypes();
+                Method mbeanServerMethod =
+                    MBeanServer.class.getMethod(name, sig);
+                value = mbeanServerMethod.invoke(server, args);
+            } catch(InvocationTargetException e) {
+                Throwable t = e.getTargetException();
+                if (t instanceof Exception) {
+                    throw (Exception) t;
+                } else {
+                    throw new UndeclaredThrowableException(t, method.toString());
+                }
+            }
+
+            return value;
+        } finally {
+            if (newCL != null &amp;amp;&amp;amp; newCL != oldCL) {
+                thread.setContextClassLoader(oldCL);
+            }
+        }
+    }
+}</programlisting>
+        <para>The code block dispatches the MBeanServer method invocation to the <literal>InvokerAdaptorService</literal> MBeanServer instance to which the  was deployed. The server instance variable is inherited from the <literal>ServiceMBeanSupport</literal> superclass.
+   </para>
+        <para>Any exceptions that result  from the reflective invocation are handled, including unwrapping  any declared exceptions thrown by the invocation.
+   The MBean code completes with the return of the successful MBeanServer method invocation result.
+   </para>
+      </example>
+      <note>
+        <para>The <literal>InvokerAdaptorService</literal> MBean does not deal directly with any transport specific details. There is the calculation of the method hash to Method mapping, but this is a transport independent detail.
+   </para>
+      </note>
+      <para>
+    Now take a look at how the <literal>InvokerAdaptorService</literal> may be used to expose the same <literal>org.jboss.jmx.adaptor.rmi.RMIAdaptor</literal> interface via RMI/JRMP as seen in Connecting to JMX Using RMI. </para>
+      <para>We  start by presenting the proxy factory and <literal>InvokerAdaptorService</literal> configurations found in the default setup in the <literal>jmx-invoker-adaptor-service.sar</literal> deployment. <xref linkend="A_Detached_Invoker_Example_the_MBeanServer_Invoker_Adaptor_Service-The_default_jmx_invoker_adaptor_server.sar_jboss_service.xml_deployment_descriptor"/> shows the <literal>jboss-service.xml</literal> descriptor for this deployment.
+   </para>
+      <example id="A_Detached_Invoker_Example_the_MBeanServer_Invoker_Adaptor_Service-The_default_jmx_invoker_adaptor_server.sar_jboss_service.xml_deployment_descriptor">
+        <title>Default jmx-invoker-adaptor-server.sar deployment descriptor</title>
+        <programlisting language="XML">&lt;server&gt;
+    &lt;!-- The JRMP invoker proxy configuration for the InvokerAdaptorService --&gt;
+    &lt;mbean code=&quot;org.jboss.invocation.jrmp.server.JRMPProxyFactory&quot;
+           name=&quot;jboss.jmx:type=adaptor,name=Invoker,protocol=jrmp,service=proxyFactory&quot;&gt;
+        &lt;!-- Use the standard JRMPInvoker from conf/jboss-service.xml --&gt;
+        &lt;attribute name=&quot;InvokerName&quot;&gt;jboss:service=invoker,type=jrmp&lt;/attribute&gt;
+        &lt;!-- The target MBean is the InvokerAdaptorService configured below --&gt;
+        &lt;attribute name=&quot;TargetName&quot;&gt;jboss.jmx:type=adaptor,name=Invoker&lt;/attribute&gt;
+        &lt;!-- Where to bind the RMIAdaptor proxy --&gt;
+        &lt;attribute name=&quot;JndiName&quot;&gt;jmx/invoker/RMIAdaptor&lt;/attribute&gt;
+        &lt;!-- The RMI compatible MBeanServer interface --&gt;
+        &lt;attribute name=&quot;ExportedInterface&quot;&gt;org.jboss.jmx.adaptor.rmi.RMIAdaptor&lt;/attribute&gt;
+        &lt;attribute name=&quot;ClientInterceptors&quot;&gt;
+            &lt;iterceptors&gt;
+                &lt;interceptor&gt;org.jboss.proxy.ClientMethodInterceptor&lt;/interceptor&gt;
+                &lt;interceptor&gt;
+                    org.jboss.jmx.connector.invoker.client.InvokerAdaptorClientInterceptor 
+                &lt;/interceptor&gt;
+                &lt;interceptor&gt;org.jboss.invocation.InvokerInterceptor&lt;/interceptor&gt;
+            &lt;/iterceptors&gt;
+        &lt;/attribute&gt;
+        &lt;depends&gt;jboss:service=invoker,type=jrmp&lt;/depends&gt;
+    &lt;/mbean&gt; 
+    &lt;!-- This is the service that handles the RMIAdaptor invocations by routing
+         them to the MBeanServer the service is deployed under. --&gt;
+    &lt;mbean code=&quot;org.jboss.jmx.connector.invoker.InvokerAdaptorService&quot; 
+           name=&quot;jboss.jmx:type=adaptor,name=Invoker&quot;&gt;
+        &lt;attribute name=&quot;ExportedInterface&quot;&gt;org.jboss.jmx.adaptor.rmi.RMIAdaptor&lt;/attribute&gt;
+    &lt;/mbean&gt;
+&lt;/server&gt;
+</programlisting>
+      </example>
+      <para>
+    The first MBean, <literal>org.jboss.invocation.jrmp.server.JRMPProxyFactory</literal>, is the proxy factory MBean service that creates proxies for the RMI/JRMP protocol. The configuration of this service as shown in <xref linkend="A_Detached_Invoker_Example_the_MBeanServer_Invoker_Adaptor_Service-The_default_jmx_invoker_adaptor_server.sar_jboss_service.xml_deployment_descriptor"/> states that the JRMPInvoker will be used as the detached invoker, the <literal>InvokerAdaptorService</literal> is the target mbean to which requests will be forwarded, that the proxy will expose the <literal>RMIAdaptor</literal> interface, the proxy will be bound into JNDI under the name <literal>jmx/invoker/RMIAdaptor</literal>, and the proxy will contain 3 interceptors: <literal>ClientMethodInterceptor</literal>, <literal>InvokerAdaptorClientInterceptor</literal>, <literal>InvokerInterceptor</literal>. The configuration of the <literal>InvokerAdaptorService</literal> simply sets the RMIAdaptor interface that the service is exposing.
+   </para>
+      <para>
+    The last piece of the configuration for exposing the <literal>InvokerAdaptorService</literal> via RMI/JRMP is the detached invoker. The detached invoker we will use is the standard RMI/JRMP invoker used by the EJB containers for home and remote invocations, and this is the <literal>org.jboss.invocation.jrmp.server.JRMPInvoker</literal> MBean service configured in the <literal>conf/jboss-service.xml</literal> descriptor. That we can use the same service instance emphasizes the detached nature of the invokers. The JRMPInvoker simply acts as the RMI/JRMP endpoint for all RMI/JRMP proxies regardless of the interface(s) the proxies expose or the service the proxies utilize.
+   </para>
+    </section>
+  </section>
+</chapter>

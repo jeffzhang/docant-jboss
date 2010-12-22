@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.3//EN" "http://www.oasis-open.org/docbook/xml/4.3/docbookx.dtd">
+
+  <chapter id="quickstart.chapt">
+    <title>Quick Start</title>
+    
+    <para>
+     In this chapter, we demonstrate the world's simplest JSF "Hello World" application.
+    </para>
+
+      <section id="dir-structure">
+        <title>Create your WAR structure</title>
+        <para>
+          Go to your <filename>JBOSS_HOME/server/default/deploy</filename> directory and create these two subdirectories:
+	</para>
+        
+        <itemizedlist>
+          <listitem><filename>hellojsf.war</filename></listitem>
+          <listitem><filename>hellojsf.war/WEB-INF</filename></listitem>
+        </itemizedlist>
+	  
+     </section>
+     <section id="web-xml">
+       <title>Create a minimal web.xml</title>
+       <para>
+         This <filename>web.xml</filename> only needs the minimum 
+         declarations shown below.  Place the file in <filename>/WEB-INF</filename>.
+       </para>
+       
+       <programlisting><![CDATA[<?xml version="1.0"?>
+<web-app>
+</web-app>]]>
+       </programlisting>
+       <note>
+         As shown, you don't necessarily need to declare a FacesServlet or mappings in web.xml.  If you
+         leave this out, JBoss AS6 will add it automatically with default mappings as
+         demonstrated at the end of this chapter.
+       </note>
+     </section>
+
+     <section id="create-markup">
+       <title>Create a minimal faces-config.xml</title>
+       <para>
+         This <filename>faces-config.xml</filename> only needs the minimum
+         declarations shown below.  Place the file in <filename>/WEB-INF</filename>.
+       </para>
+       <programlisting><![CDATA[<faces-config xmlns="http://java.sun.com/xml/ns/javaee"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-facesconfig_2_0.xsd"
+              version="2.0">
+
+</faces-config>]]>
+       </programlisting>
+       <para>
+         The faces-config.xml is only there to signal to
+         JBoss AS that this is a JSF application.  There are many other ways that JBoss
+         AS6 could recognize this as a JSF application.  This is explained in detail in chapter 3.
+       </para>
+     </section>
+
+     <section id="jsf-markup">
+       <title>Create Your JSF Markup</title>
+       <para>
+         We will use a single facelet.  Create the file <filename>index.xhtml</filename>
+         and put it in your <filename>deploy/hellojsf.war</filename> directory.
+       </para>
+       <para>
+         We use a little JSF2/EL 2.2 trick to avoid the need for a backing bean.  We can
+         grab the input value directly from the request object using a parameterized EL
+         expression.
+       </para>
+       <programlisting><![CDATA[<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+                      "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:h="http://java.sun.com/jsf/html"
+      xmlns:f="http://java.sun.com/jsf/core">
+
+     <f:view>
+        <h:form id="form1">
+          <h:outputText value="Enter Your Name:"/>
+          <h:inputText id="name"/>
+          <h:commandButton value="Submit" />
+        </h:form>
+        <h:outputText rendered="#{not empty request.getParameter('form1:name')}"
+                      value=" Hello #{request.getParameter('form1:name')}"/>
+     </f:view>
+
+</html>]]>
+       </programlisting>
+     </section>
+
+     <section id="run-the-app">
+       <title>Run the application</title>
+       <para>
+         Now we're done!  We only needed three files and two of those were
+         just placeholders.
+       </para>
+       <para>
+         Start JBoss AS6 and put any of the following URLs into your browswer:
+       </para>
+       <itemizedlist>
+          <listitem><ulink url="http://localhost:8080/hellojsf/index.jsf">http://localhost:8080/hellojsf/index.jsf</ulink></listitem>
+          <listitem><ulink url="http://localhost:8080/hellojsf/index.faces">http://localhost:8080/hellojsf/index.faces</ulink></listitem>
+          <listitem><ulink url="http://localhost:8080/hellojsf/faces/index.xhtml">http://localhost:8080/hellojsf/faces/index.xhtml</ulink></listitem>
+        </itemizedlist>
+     </section>
+   </chapter>
+

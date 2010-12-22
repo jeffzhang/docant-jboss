@@ -1,0 +1,1573 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.3//EN" "http://www.oasis-open.org/docbook/xml/4.3/docbookx.dtd">
+
+<chapter id="jgroups.chapt">
+    <title>JGroups Services</title>
+    <para>JGroups provides the underlying group communication support for
+       JBoss AS clusters. The way the AS's clustered services interact with
+       JGroups was covered previously in <xref linkend="clustering-blocks-jgroups"/>. 
+       The focus of this chapter is on the details, particularly configuration
+       details and troubleshooting tips. This chapter is not intended to
+       be a complete set of JGroups documentation; we recommend that users 
+       interested in in-depth JGroups knowledge also consult:</para>
+       
+       <itemizedlist>
+       <listitem><para>The JGroups project documentation at <ulink url="http://jgroups.org/ug.html">http://jgroups.org/ug.html</ulink></para></listitem>
+       <listitem><para>The JGroups wiki pages at jboss.org, rooted at <ulink url="https://www.jboss.org/community/wiki/JGroups">https://www.jboss.org/community/wiki/JGroups</ulink></para></listitem>
+       </itemizedlist>
+       
+       <para>The first section of this chapter covers the many JGroups 
+       configuration options in considerable detail. Readers should
+       understand that JBoss AS ships with a reasonable set of default JGroups 
+       configurations. Most applications just work out of the box with the 
+       default configurations. You only need to tweak them when you are 
+       deploying an application that has special network or performance requirements.</para>
+    
+    <section id="jgroups-configuration">
+      <title>Configuring a JGroups Channel's Protocol Stack</title>
+      <para>The JGroups framework provides services to enable peer-to-peer communications between nodes in a
+        cluster. Communication occurs over a communication channel. The channel built up from
+        a stack of network communication "protocols", each of which is responsible
+        for adding a particular capability to the overall behavior of the channel.
+        Key capabilities provided by various protocols include, among others, transport,
+        cluster discovery, message ordering, loss-less message delivery, detection
+        of failed peers, and cluster membership management services.</para>
+         
+        <para><xref linkend="JGroupsStack.fig"/> shows a conceptual cluster with
+        each member's channel composed of a stack of JGroups protocols.</para>
+      <figure id="JGroupsStack.fig">
+        <title>Protocol stack in JGroups</title>
+        <mediaobject>
+          <imageobject>
+            <imagedata align="center" scalefit="1" fileref="images/JGroupsStack.png"/>
+          </imageobject>
+        </mediaobject>
+      </figure>
+       
+      <para>In this section of the chapter, we look into some of the most commonly 
+      used protocols, with the protocols organized by the type of behavior they
+      add to the overall channel. For each protocol, we discuss a few key
+      configuration attributes exposed by the protocol, but generally speaking
+      changing configuration attributes is a matter for experts only. More important
+      for most readers will be to get a general understanding of the purpose of the 
+      various protocols.</para>
+      
+      <para>The JGroups configurations used in the AS appear as nested elements in
+      the <literal>$JBOSS_HOME/server/all/cluster/jgroups-channelfactory.sar/META-INF/jgroups-channelfactory-stacks.xml</literal> 
+      file. This file is parsed by the <literal>ChannelFactory</literal> service, which
+      uses the contents to provide appropriately configured channels to the AS
+      clustered services that need them. See <xref linkend="clustering-blocks-jgroups-channelfactory"/>
+      for more on the <literal>ChannelFactory</literal> service.</para>
+      
+      <para>Following is an example protocol stack configuration from 
+      <literal>jgroups-channelfactory-stacks.xml</literal>:</para>
+<programlisting><![CDATA[<stack name="udp-async"
+           description="UDP-based stack, optimized for high performance for
+                        asynchronous RPCs (enable_bundling=true)">
+        <config>
+          <UDP
+             singleton_name="udp-async"
+             mcast_port="${jboss.jgroups.udp_async.mcast_port:45689}"
+             mcast_addr="${jboss.partition.udpGroup:228.11.11.11}"
+             tos="8"
+             ucast_recv_buf_size="20000000"
+             ucast_send_buf_size="640000"
+             mcast_recv_buf_size="25000000"
+             mcast_send_buf_size="640000"
+             loopback="true"
+             discard_incompatible_packets="true"
+             enable_bundling="true"
+             max_bundle_size="64000"
+             max_bundle_timeout="30"
+             ip_ttl="${jgroups.udp.ip_ttl:2}"
+             thread_naming_pattern="cl"
+             timer.num_threads="12"
+             enable_diagnostics="${jboss.jgroups.enable_diagnostics:true}"
+             diagnostics_addr="${jboss.jgroups.diagnostics_addr:224.0.0.75}"
+             diagnostics_port="${jboss.jgroups.diagnostics_port:7500}"
+
+             thread_pool.enabled="true"
+             thread_pool.min_threads="8"
+             thread_pool.max_threads="200"
+             thread_pool.keep_alive_time="5000"
+             thread_pool.queue_enabled="true"
+             thread_pool.queue_max_size="1000"
+             thread_pool.rejection_policy="discard"
+      
+             oob_thread_pool.enabled="true"
+             oob_thread_pool.min_threads="8"
+             oob_thread_pool.max_threads="200"
+             oob_thread_pool.keep_alive_time="1000"
+             oob_thread_pool.queue_enabled="false"
+             oob_thread_pool.rejection_policy="discard"/>
+          <PING timeout="2000" num_initial_members="3"/>
+          <MERGE2 max_interval="100000" min_interval="20000"/>
+          <FD_SOCK/>
+          <FD timeout="6000" max_tries="5" shun="true"/>
+          <VERIFY_SUSPECT timeout="1500"/>
+          <BARRIER/>
+          <pbcast.NAKACK use_mcast_xmit="true" gc_lag="0"
+                   retransmit_timeout="300,600,1200,2400,4800"
+                   discard_delivered_msgs="true"/>
+          <UNICAST timeout="300,600,1200,2400,3600"/>
+          <pbcast.STABLE stability_delay="1000" desired_avg_gossip="50000"
+                   max_bytes="400000"/>          
+          <VIEW_SYNC avg_send_interval="10000"/>
+          <pbcast.GMS print_local_addr="true" join_timeout="3000"
+                   shun="true"
+                   view_bundling="true"
+                   view_ack_collection_timeout="5000"
+                   resume_task_timeout="7500"/>
+          <FC max_credits="2000000" min_threshold="0.10" 
+              ignore_synchronous_response="true"/>
+          <FRAG2 frag_size="60000"/>
+          <!-- pbcast.STREAMING_STATE_TRANSFER/ -->
+          <pbcast.STATE_TRANSFER/>
+          <pbcast.FLUSH timeout="0" start_flush_timeout="10000"/>
+        </config>
+    </stack> ]]>
+</programlisting>
+<para>
+	All the JGroups configuration data is contained in the &lt;config&gt; element. This information is used to configure a JGroups Channel; the Channel is conceptually similar to a socket, and manages communication between peers in a cluster. Each element inside the &lt;config&gt; element defines a particular JGroups Protocol; each Protocol performs one function, and the combination of those functions is what defines the characteristics of the overall Channel. In the next several sections, we will dig into the commonly used protocols and their options and explain exactly what they mean.
+</para>
+
+<section><title>Common Configuration Properties</title>
+	<para>The following configuration property is exposed by all of the JGroups protocols discussed below:
+</para>
+<itemizedlist>
+   <listitem><para><literal>stats</literal> whether the protocol should gather runtime statistics on its operations that can be exposed via tools like the AS's administration console or the JGroups Probe utility. What, if any, statistics are gathered depends on the protocol. Default is <literal>true</literal>.</para></listitem>	
+</itemizedlist>
+<note>
+   <para>All of the protocols in the versions of JGroups used in JBoss AS 3.x and 4.x exposed   
+   <literal>down_thread</literal> and <literal>up_thread</literal> attributes.
+   The JGroups version used in AS 5 and later no longer uses those attributes,
+   and a WARN message will be written to the server log if they are configured
+   for any protocol.</para>
+</note>
+
+</section>
+
+<section id="jgroups-transport">
+        <title>Transport Protocols</title>
+        <para>The transport protocols are responsible for actually sending messages on the network and receiving them from the network.
+              They also manage the pools of threads that are
+              used to deliver incoming messages up the protocol stack. 
+              JGroups supports UDP, TCP, and TUNNEL as transport protocols.</para>
+        <note>
+          <para>The <literal>UDP</literal>, <literal>TCP</literal>, and <literal>TUNNEL</literal> protocols are
+                        mutually exclusive. You can only have one transport protocol in each JGroups
+                        <literal>config</literal> element</para>
+        </note>
+        <section id="jgroups-transport-udp">
+          <title>UDP configuration</title>
+          <para>UDP is the preferred protocol for JGroups. UDP uses multicast (or, 
+                        in an unusual configuration, multiple unicasts) to send and
+                        receive messages. If you choose UDP as the transport protocol for your cluster service, you need
+                        to configure it in the <literal>UDP</literal> sub-element in the JGroups
+                        <literal>config</literal> element. Here is an example.</para>
+<programlisting><![CDATA[          <UDP
+             singleton_name="udp-async"
+             mcast_port="${jboss.jgroups.udp_async.mcast_port:45689}"
+             mcast_addr="${jboss.partition.udpGroup:228.11.11.11}"
+             tos="8"
+             ucast_recv_buf_size="20000000"
+             ucast_send_buf_size="640000"
+             mcast_recv_buf_size="25000000"
+             mcast_send_buf_size="640000"
+             loopback="true"
+             discard_incompatible_packets="true"
+             enable_bundling="true"
+             max_bundle_size="64000"
+             max_bundle_timeout="30"
+             ip_ttl="${jgroups.udp.ip_ttl:2}"
+             thread_naming_pattern="cl"
+             timer.num_threads="12"
+             enable_diagnostics="${jboss.jgroups.enable_diagnostics:true}"
+             diagnostics_addr="${jboss.jgroups.diagnostics_addr:224.0.0.75}"
+             diagnostics_port="${jboss.jgroups.diagnostics_port:7500}"
+
+             thread_pool.enabled="true"
+             thread_pool.min_threads="8"
+             thread_pool.max_threads="200"
+             thread_pool.keep_alive_time="5000"
+             thread_pool.queue_enabled="true"
+             thread_pool.queue_max_size="1000"
+             thread_pool.rejection_policy="discard"
+      
+             oob_thread_pool.enabled="true"
+             oob_thread_pool.min_threads="8"
+             oob_thread_pool.max_threads="200"
+             oob_thread_pool.keep_alive_time="1000"
+             oob_thread_pool.queue_enabled="false"
+             oob_thread_pool.rejection_policy="discard"/>]]>
+</programlisting>
+
+
+          <para>The available attributes in the above JGroups configuration are listed discussed below.
+          First, we discuss the attributes that are particular to the UDP transport protocol.
+          Then we will cover those attributes shown above that are also
+          used by the TCP and TUNNEL transport protocols.</para>
+          
+          <para>The attributes particular to UDP are:</para>
+          
+          <itemizedlist>
+            <listitem>
+              <para><emphasis role="bold">ip_mcast</emphasis> specifies whether or not to use IP
+            multicasting. The default is <literal>true</literal>. If set to false, 
+            for messages to the entire group UDP will send n unicast packets 
+            rather than 1 multicast packet. Either way, packets are UDP datagrams.
+         </para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">mcast_addr</emphasis> specifies the 
+              multicast address (class D) for communicating with the group (i.e., the cluster).
+              The standard protocol stack configurations in JBoss AS use the
+              value of system property <literal>jboss.partition.udpGroup</literal>,
+              if set, as the value for this attribute. Using the <literal>-u</literal>
+              command line switch when starting JBoss AS sets that value.
+              See <xref linkend="clustering-jgroups-isolation"/> for how to use this configuration attribute
+              to ensure JGroups channels are properly isolated from one another.
+              If this attribute is omitted, the default is <literal>228.8.8.8</literal>.
+         </para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">mcast_port</emphasis> specifies the port 
+              to use for multicast communication with the group. 
+              See <xref linkend="clustering-jgroups-isolation"/> for how to use this configuration attribute
+              to ensure JGroups channels are properly isolated from one another.
+              If this attribute is omitted, the default is <literal>45566</literal>.</para>
+            </listitem>   
+            <listitem>
+              <para><emphasis role="bold">mcast_send_buf_size, mcast_recv_buf_size, ucast_send_buf_size,
+                                ucast_recv_buf_size</emphasis> define socket receive and send buffer sizes that
+                                JGroups will request from the operating system. It is good to
+                                have a large receive buffer size, so packets are less likely to get dropped due to
+                                buffer overflow. Note, however, that the size of socket buffers is
+                                limited by OS limits, so actually obtaining the desired
+                                buffer may require OS-level configuration. See
+                                <xref linkend="jgroups-perf-udpbuffer"/> for further
+                                details.</para>
+            </listitem>  
+            <listitem>
+          <para><emphasis role="bold">bind_port</emphasis> specifies the port to
+              which the unicast receive socket should be bound. The default is
+              <literal>0</literal>; i.e. use an ephemeral port.</para>
+            </listitem>
+            <listitem>
+          <para><emphasis role="bold">port_range</emphasis> specifies the number of
+          ports to try if the port identified by <literal>bind_port</literal> 
+          is not available. The default is <literal>1</literal>, meaning
+          only try to bind to <literal>bind_port</literal>.</para>
+            </listitem>
+            <listitem>
+          <para><emphasis role="bold">ip_ttl</emphasis> specifies time-to-live for IP Multicast packets. TTL is the commonly used term in multicast networking, but is actually something of a misnomer, since the value here refers to how many network hops a packet will be allowed to travel before networking equipment will drop it.
+          </para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">tos</emphasis> specifies the traffic class for sending unicast and multicast datagrams.</para>
+            </listitem>
+          </itemizedlist>
+          
+          <para>The attributes that are common to all transport protocols,
+          and thus have the same meanings when used with TCP or TUNNEL, are:
+          </para>
+          <itemizedlist>
+            <listitem>
+            <para><emphasis role="bold">singleton_name</emphasis> provides
+            a unique name for this transport protocol configuration. Used by the AS <literal>ChannelFactory</literal>
+            to support sharing of a transport protocol instance by different channels 
+            that use the same transport protocol configuration. See 
+            <xref linkend="clustering-blocks-jgroups-sharedtransport"/>.</para>
+            </listitem>
+            <listitem>
+          <para><emphasis role="bold">bind_addr</emphasis> specifies the interface 
+              on which to receive and send messages.
+              By default JGroups uses the value of system property <literal>jgroups.bind_addr</literal>, which 
+              in turn can be easily set via the <literal>-b</literal> command line switch.
+              See <xref linkend="jgroups-other"/> for more on binding JGroups 
+              sockets.</para>
+            </listitem>
+            <listitem>
+          <para><emphasis role="bold">receive_on_all_interfaces </emphasis> specifies whether this node
+                                should listen on all interfaces for multicasts. The default is <literal>false</literal>.
+                                It overrides the <literal>bind_addr</literal> property for receiving multicasts.
+                                However, <literal>bind_addr</literal> (if set) is still used to send multicasts.</para>
+            </listitem>
+       <listitem><para><emphasis role="bold">send_on_all_interfaces</emphasis> specifies whether this node send UDP packets via all the NICs if you have a multi NIC machine. This means that the same multicast message is sent N times, so use with care.
+             </para>
+          </listitem>
+       
+          <listitem>
+             <para><emphasis role="bold">receive_interfaces</emphasis> specifies a list of of interfaces on which to receive multicasts. The multicast receive socket will listen on all of these interfaces. This is a comma-separated list of IP addresses or interface names. E.g. "<literal>192.168.5.1,eth1,127.0.0.1</literal>".
+             </para>
+          </listitem>  
+       
+          <listitem>
+             <para><emphasis role="bold">send_interfaces</emphasis> specifies a 
+             list of of interfaces via which to send multicasts. The multicast s
+             ender socket will send on all of these interfaces. This is a 
+             comma-separated list of IP addresses or interface names. E.g. 
+             "<literal>192.168.5.1,eth1,127.0.0.1</literal>".This means that the 
+             same multicast message is sent N times, so use with care.
+             </para>
+          </listitem>   
+            <listitem>
+              <para><emphasis role="bold">enable_bundling</emphasis> specifies whether to enable message bundling.
+                                If <literal>true</literal>, the tranpsort protocol would queue outgoing messages until
+                                <literal>max_bundle_size</literal> bytes have accumulated, or
+                                <literal>max_bundle_time</literal> milliseconds have elapsed, whichever occurs
+                                first. Then the transport protocol would bundle queued messages into one 
+                                large message and send it. The messages are
+                                unbundled at the receiver. The default is <literal>false</literal>. 
+                                Message bundling can have significant performance benefits for channels
+                                that are used for high volume sending of messages where the sender does
+                                not block waiting for a response from recipients (e.g. a JBoss Cache
+                                instance configured for REPL_ASYNC.) It can add considerable latency
+                                to applications where senders need to block waiting for responses, so
+                                it is not recommended for usages like JBoss Cache REPL_SYNC.</para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">loopback</emphasis> specifies whether the thread sending a message
+              to the group should itself carry the message back up the stack for delivery. (Messages sent to
+              the group are always delivered to the sending node as well.) If 
+              <literal>false</literal> the sending thread does not carry the message;
+              rather the transport protocol waits to read the message off the network
+              and uses one of the message delivery pool threads to deliver it.
+              The default is <literal>false</literal>, however the current
+              recommendation is to always set this to <literal>true</literal> in order
+              to ensure the channel receives its own messages in case the network
+              interface goes down.</para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">discard_incompatible_packets</emphasis> specifies whether to
+            discard packets sent by peers using a different JGroups version. Each message in the cluster is tagged
+            with a JGroups version. When a message from a different version of JGroups is received,
+				it will be silently discarded if this is set to true, otherwise a warning will be logged. In no case
+            will the message be delivered. The default is <literal>false</literal></para>
+            </listitem>
+       <listitem>
+          <para><emphasis role="bold">enable_diagnostics</emphasis> specifies that the transport should open a 
+          multicast socket on address <literal>diagnostics_addr</literal> and port 
+          <literal>diagnostics_port</literal> to listen for diagnostic requests
+          sent by JGroups' <ulink url="http://www.jboss.org/community/wiki/Probe"><emphasis role="bold">Probe</emphasis> utility</ulink>.
+          </para>
+       </listitem>
+       
+       <listitem>
+         <para>The various <emphasis role="bold">thread_pool</emphasis> 
+         attributes configure the behavior of the pool of threads JGroups uses
+         to carry ordinary incoming messages up the stack. The various attributes
+         end up providing the constructor arguments for an instance of 
+         <literal>java.util.concurrent.ThreadPoolExecutorService</literal>.
+         In the example above, the pool will have a core (i.e. minimum) size
+         of 8 threads, and a maximum size of 200 threads. If more than
+         8 pool threads have been created, a thread returning from carrying
+         a message will wait for up to 5000 ms to be assigned a new message to
+         carry, after which it will terminate. If no threads are available to
+         carry a message, the (separate) thread reading messages off the socket
+         will place messages in a queue; the queue will hold up to 1000 messages.
+         If the queue is full, the thread reading messages off the socket will
+         discard the message.</para>
+       </listitem>
+       
+       <listitem>
+          <para>The various <emphasis role="bold">oob_thread_pool</emphasis> attributes
+          are similar to the <emphasis role="bold">thread_pool</emphasis> attributes in that
+          they configure a <literal>java.util.concurrent.ThreadPoolExecutorService</literal>
+          used to carry incoming messages up the protocol stack. In this case,
+          the pool is used to carry a special type of message known as an "Out-Of-Band"
+          message, OOB for short. OOB messages are exempt from the ordered-delivery
+          requirements of protocols like NAKACK and UNICAST and thus can be delivered
+          up the stack even if NAKACK or UNICAST are queueing up messages from
+          a particular sender. OOB messages are often used internally by JGroups
+          protocols and can be used applications as well. JBoss Cache in REPL_SYNC
+          mode, for example, uses OOB messages for the second phase of its
+          two-phase-commit protocol.</para>
+       </listitem>
+	    
+          </itemizedlist>
+        </section>
+	
+	
+        <section id="jgroups-transport-tcp">
+          <title>TCP configuration</title>
+          <para>Alternatively, a JGroups-based cluster can also work over TCP connections. Compared with UDP,
+                        TCP generates more network traffic when the cluster size increases. TCP
+                        is fundamentally a unicast protocol. To send multicast messages, JGroups uses multiple TCP
+                        unicasts. To use TCP as a transport protocol, you should define a <literal>TCP</literal> element
+                        in the JGroups <literal>config</literal> element. Here is an example of the
+                        <literal>TCP</literal> element.</para>
+          <programlisting>
+&lt;TCP singleton_name="tcp" 
+        start_port="7800" end_port="7800"/&gt;
+                </programlisting>
+          <para>Below are the attributes that are specific to the <literal>TCP</literal> protocol.</para>
+          <itemizedlist>
+            <listitem>
+              <para><emphasis role="bold">start_port, end_port</emphasis> define the range of TCP ports
+                                the server should bind to. The server socket is bound to the first available port beginning with
+                                    <literal>start_port</literal>. If no available port is found (e.g., because of other
+				    sockets already using the ports) before the <literal>end_port</literal>, the server throws an exception. If no <literal>end_port</literal> is provided or <literal>end_port &lt; start_port</literal> then there is no upper limit on the port range. If <literal>start_port == end_port</literal>, then we force JGroups to use the given port (start fails if port is not available). The default is 7800. If set to 0, then the operating system will pick a port. Please, bear in mind that setting it to 0 will work only if we use MPING or TCPGOSSIP as discovery protocol because <literal>TCCPING</literal> requires listing the nodes and their corresponding ports.</para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">bind_port</emphasis> in TCP is just an alias for <literal>start_port</literal>; if
+              configured internally it sets <literal>start_port</literal>.</para>
+            </listitem>
+            <listitem>
+		    <para><emphasis role="bold">recv_buf_size, send_buf_size</emphasis> define receive and send buffer sizes. It is good to have a large receiver buffer size, so packets are less likely to get dropped due to buffer overflow.</para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">conn_expire_time</emphasis> specifies the time (in milliseconds)
+                                after which a connection can be closed by the reaper if no traffic has been
+                            received.</para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">reaper_interval</emphasis> specifies interval (in milliseconds)
+                                to run the reaper. If both values are 0, no reaping will be done. If either value is
+				&gt; 0, reaping will be enabled. By default, reaper_interval is 0, which means no reaper.</para>
+            </listitem>
+	    <listitem>
+		    <para><emphasis role="bold">sock_conn_timeout</emphasis> specifies max time in millis for a socket creation. When doing the initial discovery, and a peer hangs, don't wait forever but go on after the timeout to ping other members. Reduces chances of *not* finding any members at all. The default is 2000.</para>
+    </listitem>
+	    <listitem>
+		    <para><emphasis role="bold">use_send_queues</emphasis> specifies whether to use separate send queues for each connection. This prevents blocking on write if the peer hangs. The default is true.</para>
+		      </listitem>
+      <listitem>
+	      <para><emphasis role="bold">external_addr</emphasis> specifies external IP address to broadcast to other group members (if different to local address). This is useful when you have use (Network Address Translation) NAT, e.g. a node on a private network, behind a firewall, but you can only route to it via an externally visible address, which is different from the local address it is bound to. Therefore, the node can be configured to broadcast its external address, while still able to bind to the local one. This avoids having to use the TUNNEL protocol, (and hence a requirement for a central gossip router) because nodes outside the firewall can still route to the node inside the firewall, but only on its external address. Without setting the external_addr, the node behind the firewall will broadcast its private address to the other nodes which will not be able to route to it.</para>
+		      </listitem>
+      <listitem>
+	      <para><emphasis role="bold">skip_suspected_members</emphasis> specifies whether unicast messages should not be sent to suspected members. The default is true.</para>
+		     </listitem>
+	<listitem>
+		<para><emphasis role="bold">tcp_nodelay</emphasis> specifies TCP_NODELAY. TCP by default nagles messages, that is, conceptually, smaller messages are bundled into larger ones. If we want to invoke synchronous cluster method calls, then we need to disable nagling in addition to disabling message bundling (by setting <literal>enable_bundling</literal> to false). Nagling is disabled by setting <literal>tcp_nodelay</literal> to true. The default is false.
+		</para>
+		     </listitem>
+	    
+    </itemizedlist>
+    
+       <note>
+          <para>All of the attributes common to all protocols discussed in
+          the UDP protocol section also apply to TCP.</para>
+       </note>
+        </section>
+	
+        <section id="jgroups-transport-tunnel">
+          <title>TUNNEL configuration</title>
+          <para>The TUNNEL protocol uses an external router process to send messages. The external router is a Java process running the
+		    <literal>org.jgroups.stack.GossipRouter</literal> main class. Each node has to register with the router. All messages are sent to the router and forwarded on to their destinations. The TUNNEL approach can be used to setup communication with nodes behind firewalls. A node can establish a TCP connection to the GossipRouter through the firewall (you can use port 80). The same connection is used by the router to send messages to nodes behind the firewall as most firewalls do not permit outside hosts to initiate a TCP connection to a host inside the firewall. The TUNNEL configuration is defined in the TUNNEL element in the JGroups config element. Here is an example..
+	  </para>
+          
+	  
+	  <programlisting>
+&lt;TUNNEL  singleton_name="tunnel"
+            router_port="12001"
+            router_host="192.168.5.1"/&gt;
+                </programlisting>
+
+		
+<para>The available attributes in the <literal>TUNNEL</literal> element are listed below.</para>
+          <itemizedlist>
+            <listitem>
+              <para><emphasis role="bold">router_host</emphasis> specifies the host on which the
+                                GossipRouter is running.</para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">router_port</emphasis> specifies the port on which the
+                                GossipRouter is listening.</para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">reconnect_interval</emphasis> specifies the interval in
+              ms at which TUNNEL will attempt to connect to the GossipRouter if the 
+              connection is not established. Default is <literal>5000</literal>.</para>
+            </listitem>
+          </itemizedlist>
+    
+       <note>
+          <para>All of the attributes common to all protocols discussed in
+          the UDP protocol section also apply to TUNNEL.</para>
+       </note>
+        </section>
+      </section>
+      
+      
+      
+      
+      <section id="jgroups-discovery">
+        <title>Discovery Protocols</title>
+	<para>
+		When a channel on one node connects it needs to discover what other nodes 
+      have compatible channels running and which of those nodes is currently
+      serving as the "coordinator" responsible for allowing new nodes to
+      join the group. Discovery protocols are used to discover active nodes in 
+      the cluster and determine which is the coordinator. This information is
+      then provided to the group membership protocol (GMS, see <xref linkend="jgroups-other-gms"/>) 
+      which communicates with the coordinator node's GMS to bring the newly
+      connecting node into the group.</para>
+      <para>Discovery protocols also help merge protocols (see <xref linkend="jgroups-other-merge"/>
+      to detect cluster-split situations.</para>
+	    <para>Since the discovery protocols sit on top of the transport protocol, you can choose to use different discovery protocols based on your transport protocol. These are also configured as sub-elements in the JGroups <literal>config</literal> element.</para>
+	    
+	    
+	    
+	    
+        <section id="jgroups-discovery-ping">
+          <title>PING</title>
+	  <para>
+		  PING is a discovery protocol that works by either multicasting PING requests to an IP multicast address or connecting to a gossip router. As such, PING normally sits on top of the UDP or TUNNEL transport protocols. Each node responds with a packet {C, A}, where C=coordinator's address and A=own address. After timeout milliseconds or num_initial_members replies, the joiner determines the coordinator from the responses, and sends a JOIN request to it (handled by). If nobody responds, we assume we are the first member of a group.
+	  </para>
+	  <para>Here is an example PING configuration for IP multicast. 
+	  </para>
+	  
+	  
+          <programlisting>&lt;PING timeout="2000"
+    num_initial_members="3"/&gt;
+                </programlisting>
+<para>
+	Here is another example PING configuration for contacting a Gossip Router.
+<programlisting><![CDATA[<PING gossip_host="localhost"
+      gossip_port="1234"
+      timeout="2000" 
+      num_initial_members="3"/>]]>
+</programlisting>
+
+	</para>
+		
+		
+          <para>The available attributes in the <literal>PING</literal> element are listed below.</para>
+          <itemizedlist>
+            <listitem>
+              <para><emphasis role="bold">timeout</emphasis> specifies the maximum number of milliseconds
+		      to wait for any responses. The default is 3000.</para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">num_initial_members</emphasis> specifies the maximum number of
+		      responses to wait for unless timeout has expired. The default is 2.</para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">gossip_host</emphasis> specifies the host on which the
+                                GossipRouter is running.</para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">gossip_port</emphasis> specifies the port on which the
+                                GossipRouter is listening on.</para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">gossip_refresh</emphasis> specifies the interval (in
+		      milliseconds) for the lease from the GossipRouter. The default is 20000.</para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">initial_hosts</emphasis> is a comma-separated list of addresses/ports
+                                (e.g., <literal>host1[12345],host2[23456]</literal>) which are pinged for
+                            discovery. Default is <literal>null</literal>, meaning multicast
+                            discovery should be used. If <literal>initial_hosts</literal>
+                            is specified, <emphasis>all</emphasis> possible cluster
+                            members must be listed, not just a few "well known hosts"; 
+                            otherwise discovery of cluster
+                            splits by MERGE2 will not work reliably.</para>
+            </listitem>
+          </itemizedlist>
+          <para>If both <literal>gossip_host</literal> and <literal>gossip_port</literal> are defined, the
+                        cluster uses the GossipRouter for the initial discovery. If the <literal>initial_hosts</literal>
+                        is specified, the cluster pings that static list of addresses for discovery. Otherwise, the
+                        cluster uses IP multicasting for discovery.</para>
+          <note>
+            <para>The discovery phase returns when the <literal>timeout</literal> ms have elapsed or the
+                                <literal>num_initial_members</literal> responses have been received.</para>
+          </note>
+        </section>
+	
+	
+	
+        <section id="jgroups-discovery-tcpgossip">
+          <title>TCPGOSSIP</title>
+          <para>The TCPGOSSIP protocol only works with a GossipRouter. It works essentially the same way as
+                        the PING protocol configuration with valid <literal>gossip_host</literal> and
+			<literal>gossip_port</literal> attributes. It works on top of both UDP and TCP transport protocols. Here is an example.</para>
+<programlisting><![CDATA[<TCPGOSSIP timeout="2000"
+       num_initial_members="3"
+       initial_hosts="192.168.5.1[12000],192.168.0.2[12000]"/>]]>
+</programlisting>
+
+
+          <para>The available attributes in the <literal>TCPGOSSIP</literal> element are listed below.</para>
+          <itemizedlist>
+            <listitem>
+              <para><emphasis role="bold">timeout</emphasis> specifies the maximum number of milliseconds
+		      to wait for any responses. The default is 3000.</para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">num_initial_members</emphasis> specifies the maximum number of
+		      responses to wait for unless timeout has expired. The default is 2.</para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">initial_hosts</emphasis> is a comma-separated list of addresses/ports
+                            (e.g., <literal>host1[12345],host2[23456]</literal>) of GossipRouters to register
+                            with.</para>
+            </listitem>
+          </itemizedlist>
+        </section>
+	
+	
+	
+        <section id="jgroups-discovery-tcpping">
+          <title>TCPPING</title>
+          <para>The TCPPING protocol takes a set of known members and pings them for discovery. This is
+                        essentially a static configuration. It works on top of TCP. Here is an example of the
+                            <literal>TCPPING</literal> configuration element in the JGroups <literal>config</literal>
+                        element.</para>
+          <programlisting>&lt;TCPPING timeout="2000"
+     num_initial_members="3"/
+     initial_hosts="hosta[2300],hostb[3400],hostc[4500]"
+     port_range="3"&gt;
+</programlisting>
+
+
+          <para>The available attributes in the <literal>TCPPING</literal> element are listed below.</para>
+          <itemizedlist>
+            <listitem>
+              <para><emphasis role="bold">timeout</emphasis> specifies the maximum number of milliseconds
+		      to wait for any responses. The default is 3000.</para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">num_initial_members</emphasis> specifies the maximum number of
+		      responses to wait for unless timeout has expired. The default is 2.</para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">initial_hosts</emphasis> is a comma-separated list of addresses/ports
+                                (e.g., <literal>host1[12345],host2[23456]</literal>) which are pinged for
+                            discovery. <emphasis>All</emphasis> possible cluster
+                            members must be listed, not just a few "well known hosts"; otherwise discovery of cluster
+                            splits by MERGE2 will not work reliably.</para>
+            </listitem>
+            <listitem>
+		    <para>
+			    <emphasis role="bold">port_range</emphasis> specifies the number of consecutive ports to be probed when getting the initial membership, starting with the port specified in the initial_hosts parameter. Given the current values of port_range and initial_hosts above, the TCPPING layer will try to connect to hosta[2300], hosta[2301], hosta[2302], hostb[3400], hostb[3401], hostb[3402], hostc[4500], hostc[4501], hostc[4502]. This configuration option allows for multiple possible ports on the same host to be pinged without having to spell out all of the combinations.
+             If in your TCP protocol configuration your <literal>end_port</literal> is greater than your <literal>start_port</literal>, using a TCPPING <literal>port_range</literal> equal to the difference is advised in order to ensure
+             a node is pinged no matter which port in the allowed range it ended up bound to.
+		    </para>
+            </listitem>
+          </itemizedlist>
+        </section>
+	
+	
+	
+	
+        <section id="jgroups-discovery-mping">
+          <title>MPING</title>
+	  <para>
+		  MPING uses IP multicast to discover the initial membership. Unlike the 
+        other discovery protocols, which delegate the sending and receiving of 
+        discovery messages on the network to the transport protocol, MPING handles
+        opens its own sockets to send and receive multicast discovery messages.
+        As a result it can be used with all transports. But, it usually is used 
+        in combination with TCP. TCP usually requires TCPPING, which has to list 
+        all possible group members explicitly, while MPING doesn't have this 
+        requirement. The typical use case for MPING is when we want TCP for 
+        regular message transport, but UDP multicasting is allowed for discovery. 
+	</para>
+
+<programlisting>
+&lt;MPING timeout="2000"
+    num_initial_members="3"
+    bind_to_all_interfaces="true"
+    mcast_addr="228.8.8.8"
+    mcast_port="7500"
+    ip_ttl="8"/&gt;
+</programlisting>
+
+
+          <para>The available attributes in the <literal>MPING</literal> element are listed below.</para>
+          <itemizedlist>
+            <listitem>
+              <para><emphasis role="bold">timeout</emphasis> specifies the maximum number of milliseconds
+		      to wait for any responses. The default is 3000.</para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">num_initial_members</emphasis> specifies the maximum number of
+		      responses to wait for unless timeout has expired. The default is 2..</para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">bind_addr</emphasis> specifies the interface on which to send
+                                and receive multicast packets.
+              By default JGroups uses the value of system property <literal>jgroups.bind_addr</literal>, which 
+              in turn can be easily set via the <literal>-b</literal> command line switch.
+              See <xref linkend="jgroups-other"/> for more on binding JGroups 
+              sockets.</para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">bind_to_all_interfaces</emphasis> overrides the
+                                    <literal>bind_addr</literal> and uses all interfaces in multihome nodes.</para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">mcast_addr, mcast_port, ip_ttl</emphasis> attributes are the
+                                same as related attributes in the UDP protocol configuration.</para>
+            </listitem>
+          </itemizedlist>
+        </section>
+      </section>
+      
+      
+      
+      <section id="jgroups-fd">
+        <title>Failure Detection Protocols</title>
+	<para>The failure detection protocols are used to detect failed nodes. Once a failed node is detected, a suspect verification phase can occur after which, if the node is still considered dead, the cluster updates its membership view so that further messages are not sent to the failed node and the service using JGroups is aware the node is no longer part of the cluster. The failure detection protocols are configured as sub-elements in the JGroups
+                        <literal>config</literal> element.</para>
+        
+		
+		
+<section id="jgroups-fd-fd">
+          <title>FD</title>
+	  <para>
+		  FD is a failure detection protocol based on heartbeat messages. This protocol requires each node to periodically send an are-you-alive message to its neighbor. If the neighbor fails to respond, the calling node sends a SUSPECT message to the cluster. The current group coordinator can optionally double check whether the suspected node is indeed dead (see VERIFY_SUSPECT below) after which, if the node is still considered dead, it updates the cluster's membership view. Here is an example FD configuration.
+	  </para>
+
+<programlisting>
+&lt;FD timeout="6000"
+    max_tries="5"
+    shun="true"/&gt;
+</programlisting>
+		
+		
+          <para>The available attributes in the <literal>FD</literal> element are listed below.</para>
+          <itemizedlist>
+            <listitem>
+              <para><emphasis role="bold">timeout</emphasis> specifies the maximum number of milliseconds
+		      to wait for the responses to the are-you-alive messages. The default is 3000.</para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">max_tries</emphasis> specifies the number of missed
+		      are-you-alive messages from a node before the node is suspected. The default is 2.</para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">shun</emphasis> specifies whether a failed node will be shunned, i.e. not allowed
+              to send messages to the group without formally rejoining. A shunned node would have to re-join the cluster 
+              through the discovery process. JGroups allows applications to configure a channel such that shunning leads 
+              to automatic rejoins and state transfer. This the default behavior within JBoss Application Server.</para>
+            </listitem>
+          </itemizedlist>
+          <note>
+            <para>Regular traffic from a node counts as if it is a heartbeat response. So, the are-you-alive messages are
+                            only sent when there is no regular traffic to the node for some time.</para>
+          </note>
+        </section>
+	
+	
+	
+	
+        <section id="jgroups-fd-fdsock">
+          <title>FD_SOCK</title>
+	  <para>
+FD_SOCK is a failure detection protocol based on a ring of TCP sockets created between group members. Each member in a group connects to its neighbor (last member connects to first) thus forming a ring. Member B is suspected when its neighbor A detects an abnormally closed TCP socket (presumably due to a node B crash). However, if a member B is about to leave gracefully, it lets its neighbor A know, so that it does not become suspected. The simplest FD_SOCK configuration does not take any attribute. You can just declare an empty <literal>FD_SOCK</literal> element in JGroups's <literal>config</literal> element.</para>
+          
+
+<programlisting>
+&lt;FD_SOCK/&gt;
+</programlisting>
+          
+<para>There available attributes in the <literal>FD_SOCK</literal> element are listed below.</para>
+          <itemizedlist>
+            <listitem>
+		    <para><emphasis role="bold">bind_addr</emphasis> specifies the interface to which the server socket should be bound.
+              By default JGroups uses the value of system property <literal>jgroups.bind_addr</literal>, which 
+              in turn can be easily set via the <literal>-b</literal> command line switch.
+              See <xref linkend="jgroups-other"/> for more on binding JGroups 
+              sockets.</para>
+            </listitem>
+          </itemizedlist>
+	  
+        </section>
+        
+	
+	
+	<section><title>VERIFY_SUSPECT</title>
+		<para>
+			This protocol verifies whether a suspected member is really dead by pinging that member once again. This verification is performed by the coordinator of the cluster. The suspected member is dropped from the cluster group if confirmed to be dead. The aim of this protocol is to minimize false suspicions. Here's an example.
+		</para>
+
+<programlisting><![CDATA[			
+<VERIFY_SUSPECT timeout="1500"/>]]>
+</programlisting>
+
+	<para>
+		The available attributes in the VERIFY_SUSPECT element are listed below. 
+	</para>
+	<itemizedlist>
+		<listitem>
+			<para>
+		<emphasis role="bold">timeout</emphasis> specifies how long to wait for a response from the suspected member before considering it dead.
+	</para>
+</listitem>
+</itemizedlist>
+		
+	</section>
+	
+	
+	
+	
+	<section><title>FD versus FD_SOCK</title>
+		<para>
+			FD and FD_SOCK, each taken individually, do not provide a solid failure detection layer. Let's look at the the differences between these failure detection protocols to understand how they complement each other:
+		</para>
+		<itemizedlist>
+			<listitem><para><emphasis>FD</emphasis></para>
+				<itemizedlist>
+					<listitem>
+						<para>
+							An overloaded machine might be slow in sending are-you-alive responses.
+						</para>
+				</listitem>
+				<listitem>
+						<para>
+			A member will be suspected when suspended in a debugger/profiler.
+		</para>
+	</listitem>
+	<listitem>
+						<para>
+			Low timeouts lead to higher probability of false suspicions and higher network traffic.
+		</para>
+	</listitem>
+	<listitem>
+						<para>
+			High timeouts will not detect and remove crashed members for some time.
+		</para>
+	</listitem>
+</itemizedlist>
+            </listitem>
+
+<listitem><para><emphasis>FD_SOCK</emphasis>:</para>
+
+<itemizedlist>
+	<listitem>
+		<para>
+			Suspended in a debugger is no problem because the TCP connection is still open.
+		</para>
+	</listitem>
+	<listitem>
+						<para>
+			High load no problem either for the same reason.
+		</para>
+	</listitem>
+	<listitem>
+						<para>
+			Members will only be suspected when TCP connection breaks
+		</para>
+	</listitem>
+</itemizedlist>
+
+
+	<itemizedlist>
+		<listitem>
+			<para>
+			So hung members will not be detected.
+		</para>
+	</listitem>
+	<listitem>
+		<para>
+
+			Also, a crashed switch will not be detected until the connection runs into the TCP timeout (between 2-20 minutes, depending on TCP/IP stack implementation).
+		</para>
+	</listitem>
+</itemizedlist>
+</listitem>
+</itemizedlist>
+
+<para>
+			The aim of a failure detection layer is to report promptly real failures and yet avoid false suspicions. There are two solutions:
+		</para>
+		<orderedlist>
+			<listitem>
+		<para>			
+			By default, JGroups configures the FD_SOCK socket with KEEP_ALIVE, which means that TCP sends a heartbeat on socket on which no traffic has been received in 2 hours. If a host crashed (or an intermediate switch or router crashed) without closing the TCP connection properly, we would detect this after 2 hours (plus a few minutes). This is of course better than never closing the connection (if KEEP_ALIVE is off), but may not be of much help. So, the first solution would be to lower the timeout value for KEEP_ALIVE. This can only be done for the entire kernel in most operating systems, so if this is lowered to 15 minutes, this will affect all TCP sockets.
+		</para>
+	</listitem>
+	<listitem>
+		<para>
+			The second solution is to combine FD_SOCK and FD; the timeout in FD can be set such that it is much lower than the TCP timeout, and this can be configured individually per process. FD_SOCK will already generate a suspect message if the socket was closed abnormally. However, in the case of a crashed switch or host, FD will make sure the socket is eventually closed and the suspect message generated. Example:
+		</para>
+	</listitem>
+</orderedlist>
+<programlisting><![CDATA[<FD_SOCK/>
+<FD timeout="6000" max_tries="5" shun="true"/>
+<VERIFY_SUSPECT timeout="1500"/>]]>
+</programlisting>
+
+<para>
+			This suspects a member when the socket to the neighbor has been closed abonormally (e.g. a process crash, because the OS closes all sockets). However, if a host or switch crashes, then the	sockets won't be closed, so, as a second line of defense FD will suspect the neighbor after 30 seconds. Note that with this example, if you have your system stopped in a breakpoint in the debugger, the node you're debugging will be suspected after roughly 30 seconds.
+	</para>
+<para>
+			A combination of FD and FD_SOCK provides a solid failure detection layer and for this reason, such technique is used across JGroups configurations included within JBoss Application Server.
+	</para>
+	</section>
+    </section>
+    
+    
+    
+      <section id="jgroups-reliable">
+        <title>Reliable Delivery Protocols</title>
+	<para>
+		Reliable delivery protocols within the JGroups stack ensure that messages are actually delivered and delivered in the right order (FIFO) to the destination node. The basis for reliable message delivery is positive and negative delivery acknowledgments (ACK and NAK). In the ACK mode, the sender resends the message until the acknowledgment is received from the receiver. In the NAK mode, the receiver requests retransmission when it discovers a gap.
+	</para>
+	
+	
+	
+        <section id="jgroups-reliable-unicast">
+          <title>UNICAST</title>
+          <para>
+		  The UNICAST protocol is used for unicast messages. It uses positive acknowlegements (ACK). It is configured as a sub-element under the JGroups <literal>config</literal> element. If the JGroups stack is configured with the TCP transport protocol, UNICAST is not necessary because TCP itself guarantees FIFO delivery of unicast messages. Here is an example configuration for the <literal>UNICAST</literal> protocol:</para>
+
+<programlisting>
+&lt;UNICAST timeout="300,600,1200,2400,3600"/&gt;
+</programlisting>
+          
+<para>There is only one configurable attribute in the <literal>UNICAST</literal> element.</para>
+          <itemizedlist>
+            <listitem>
+              <para><emphasis role="bold">timeout</emphasis> specifies the retransmission timeout (in
+                                milliseconds). For instance, if the timeout is "100,200,400,800", the sender resends the
+                                message if it hasn't received an ACK after 100 ms the first time, and the second time it
+                                waits for 200 ms before resending, and so on. A low value for the first timeout
+                                allows for prompt retransmission of dropped messages, but at the potential
+                                cost of unnecessary retransmissions if messages aren't actually lost, 
+                                but rather ACKs just aren't received before the timeout. High values
+                                (e.g. "1000,2000,3000") can improve performance if the network has
+                                been tuned such that UDP datagram losses are infrequent. High values
+                                on lossy networks will hurt performance since later messages will not be
+                                delivered until lost messages are retransmitted.</para>
+            </listitem>
+          </itemizedlist>
+        </section>
+	
+	
+        <section id="jgroups-reliable-nakack">
+          <title>NAKACK</title>
+          <para>The NAKACK protocol is used for multicast messages. It uses negative acknowlegements (NAK). Under this protocol, each
+                        message is tagged with a sequence number. The receiver keeps track of the received sequence numbers and
+                        delivers the messages in order. When a gap in the series of received sequence numbers is detected, the receiver 
+                        schedules a task to periodically ask the sender to retransmit the missing message. The task
+                        is cancelled if the missing message is received. The NAKACK protocol is configured as the
+                            <literal>pbcast.NAKACK</literal> sub-element under the JGroups <literal>config</literal>
+                        element. Here is an example configuration.</para>
+
+<programlisting>
+&lt;pbcast.NAKACK max_xmit_size="60000" use_mcast_xmit="false"   
+   retransmit_timeout="300,600,1200,2400,4800" gc_lag="0"
+   discard_delivered_msgs="true"/&gt;
+</programlisting>
+          
+
+<para>The configurable attributes in the <literal>pbcast.NAKACK</literal> element are as follows.</para>
+          <itemizedlist>
+            <listitem>
+              <para><emphasis role="bold">retransmit_timeout</emphasis> specifies the series of timeouts (in milliseconds) after which retransmission
+                                is requested if a missing message has not yet been received.</para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">use_mcast_xmit</emphasis> determines whether the sender should
+                                send the retransmission to the entire cluster rather than just to the node requesting it.
+                                This is useful when the <emphasis>sender</emphasis>'s network layer tends to drop packets,
+                                avoiding the need to individually retransmit to each node.</para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">max_xmit_size</emphasis> specifies the maximum size (in bytes) for a bundled
+                                retransmission, if multiple messages are reported missing.</para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">discard_delivered_msgs</emphasis> specifies whether to discard
+                                delivered messages on the receiver nodes. By default, nodes save delivered messages so
+                                any node can retransmit a lost message in case the original sender has crashed
+                                or left the group. However, if we only ask the sender to resend their messages, we can enable this option
+                                and discard delivered messages.</para>
+            </listitem>
+	    
+	    <listitem>
+		    <para><emphasis role="bold">gc_lag</emphasis> specifies the number of messages to keep in memory for retransmission
+          even after the periodic cleanup protocol (see <xref linkend="jgroups-other-gc"/>) indicates all peers have received the message.
+          Default is <literal>20</literal>.
+		    </para>
+	    </listitem>
+	    
+          </itemizedlist>
+        </section>
+     </section><section id="jgroups-other-gms">
+          <title>Group Membership (GMS)</title>
+          <para>The group membership service (GMS) protocol in the JGroups stack 
+          maintains a list of active nodes. It handles the requests to join and 
+          leave the cluster. It also handles the SUSPECT messages sent by failure
+          detection protocols. All nodes in the cluster, as well as any interested
+          services like JBoss Cache or HAPartition, are notified if the group membership changes. The group membership service is
+          configured in the <literal>pbcast.GMS</literal> sub-element under the JGroups
+          <literal>config</literal> element. Here is an example configuration.</para>
+<programlisting>
+&lt;pbcast.GMS print_local_addr="true"
+    join_timeout="3000"
+    join_retry_timeout="2000"
+    shun="true"
+    view_bundling="true"/&gt;
+</programlisting>
+          
+
+
+<para>The configurable attributes in the <literal>pbcast.GMS</literal> element are as follows.</para>
+          <itemizedlist>
+            <listitem>
+              <para><emphasis role="bold">join_timeout</emphasis> specifies the maximum number of
+                                milliseconds to wait for a new node JOIN request to succeed. Retry afterwards.</para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">join_retry_timeout</emphasis> specifies the number of
+                                milliseconds to wait after a failed JOIN before trying again.</para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">print_local_addr</emphasis> specifies whether to dump the node's
+                                own address to the standard output when starting.</para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">shun</emphasis> specifies whether a node should shun 
+              (i.e. disconnect) itself if it receives a cluster view in which it is not a member node.</para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">disable_initial_coord</emphasis> specifies whether to prevent
+                                this node becoming the cluster coordinator 
+                                <emphasis>during initial connection of the channel.
+                                This flag does not prevent a node becoming coordinator later, if 
+                                the current coordinator leaves the group.</emphasis></para>
+            </listitem>
+       <listitem>
+          <para><emphasis role="bold">view_bundling</emphasis> specifies whether multiple JOIN or LEAVE requests arriving at the same time are bundled and handled together at the same time, resulting in only 1 new view incorporating all changes. This is is more efficient than handling each request separately.
+            </para>
+            </listitem>
+       
+          </itemizedlist>
+        </section>
+   
+   
+        <section id="jgroups-other-fc">
+          <title>Flow Control (FC)</title>
+          <para>The flow control (FC) protocol tries to adapt the data sending rate 
+          to the data receipt rate among nodes. If a sender node is too fast, it 
+          might overwhelm the receiver node and result in out-of-memory conditions 
+          or dropped packets that have to be retransmitted. In JGroups, flow control is implemented via a
+          credit-based system. The sender and receiver nodes have the same number of credits (bytes) to
+          start with. The sender subtracts credits by the number of bytes in messages it sends. The
+          receiver accumulates credits for the bytes in the messages it receives. When the sender's credit
+          drops to a threshold, the receivers send some credit to the sender. If the sender's credit is
+          used up, the sender blocks until it receives credits from the receiver. The flow control protocol
+          is configured in the <literal>FC</literal> sub-element under the JGroups
+          <literal>config</literal> element. Here is an example configuration.</para>
+
+<programlisting>
+&lt;FC max_credits="2000000"
+    min_threshold="0.10" 
+    ignore_synchronous_response="true"/&gt;
+</programlisting>
+          
+
+<para>The configurable attributes in the <literal>FC</literal> element are as follows.</para>
+          <itemizedlist>
+            <listitem>
+              <para><emphasis role="bold">max_credits</emphasis> specifies the maximum number of credits
+                                (in bytes). This value should be smaller than the JVM heap size.</para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">min_credits</emphasis> specifies the number of bytes the
+                                receipt of which should trigger the receiver to send more credits to the sender.</para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">min_threshold</emphasis> specifies percentage of the
+                                <literal>max_credits</literal> that should be used to calculate <literal>min_credits</literal>. 
+                                Setting this overrides the <literal>min_credits</literal> attribute.</para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">ignore_synchronous_response</emphasis> specifies whether threads that have
+              carried messages up to the application should be allowed to carry outgoing messages back down
+              through FC without blocking for credits. The term "synchronous response"
+              refers to the fact that such an outgoing message is typically a response
+              to an incoming RPC-type message. Not allowing the threads JGroups uses
+              to carry messages up to block in FC is useful in preventing certain
+              deadlock scenarios, so a value of <literal>true</literal> is recommended.</para>
+            </listitem>
+          </itemizedlist>
+     
+<note>
+   <title>Why is FC needed on top of TCP ? TCP has its own flow control !</title>
+   <para>
+      
+      The reason is group communication, where we essentially have to send group messages at the highest speed the slowest receiver can keep up with. Let's say we have a cluster {A,B,C,D}. D is slow (maybe overloaded), the rest are fast. When A sends a group message, it uses TCP connections A-A (conceptually), A-B, A-C and A-D. So let's say A sends 100 million messages to the cluster. Because TCP's flow control only applies to A-B, A-C and A-D, but not to A-{B,C,D}, where {B,C,D} is the group, it is possible that A, B and C receive the 100M, but D only received 1M messages. (By the way, this is also the reason why we need NAKACK, even though TCP does its own retransmission).
+   </para>
+   <para>
+      Now JGroups has to buffer all messages in memory for the case when the original sender S dies and a node asks for retransmission of a message sent by S. Because all members buffer all messages they received, they need to purge stable messages (i.e. messages seen by everyone) every now and then. (This is done purging process is managed by the STABLE protocol; see <xref linkend="jgroups-other-gc"/>).
+      In the above case, the slow node D will prevent the group from purging messages above 1M, so every member will buffer 99M messages ! This in most cases leads to OOM exceptions. Note that - although the sliding window protocol in TCP will cause writes to block if the window is full - we assume in the above case that this is still much faster for A-B and A-C than for A-D.
+   </para>
+   <para>
+      So, in summary, even with TCP we need to FC to ensure we send messages at a rate the slowest receiver (D) can handle.
+   </para>
+</note>
+
+<note>
+      <title>So do I always need FC?</title>
+   <para>
+      This depends on how the application uses the JGroups channel. Referring to the example above, if there was something about the application that would naturally cause A to slow down its rate of sending because D wasn't keeping up, then FC would not be needed.
+   </para>
+   <para>
+      A good example of such an application is one that uses JGroups to make synchronous group RPC calls. By synchronous, we mean the thread that makes the call blocks waiting for responses from all the members of the group. In that kind of application, the threads on A that are making calls would block waiting for responses from D, thus naturally slowing the overall rate of calls.
+   </para>
+   <para>
+      A JBoss Cache cluster configured for REPL_SYNC is a good example of an application that makes synchronous group RPC calls. If a channel is only used for a cache configured for REPL_SYNC, we recommend you remove FC from its protocol stack.
+   </para>
+   <para>
+      And, of course, if your cluster only consists of two nodes, including FC in a TCP-based protocol stack is unnecessary. There is no group beyond the single peer-to-peer relationship, and TCP's internal flow control will handle that just fine.
+   </para>
+   <para>
+      Another case where FC may not be needed is for a channel used by a JBoss Cache configured for buddy replication and a single buddy. Such a channel will in many respects act like a two node cluster, where messages are only exchanged with one other node, the buddy. (There may be other messages related to data gravitation that go to all members, but in a properly engineered buddy replication use case these should be infrequent. But if you remove FC be sure to load test your application.)
+   </para>  
+</note>
+   
+
+     
+        </section>
+   
+   
+<section><title>Fragmentation (FRAG2)</title>
+   <para>
+      This protocol fragments messages larger than certain size. Unfragments at the receiver's side. It works for both unicast and multicast messages. It is configured in the FRAG2 sub-element under the JGroups <literal>config</literal> element. Here is an example configuration.
+   </para>
+<programlisting><![CDATA[  
+      <FRAG2 frag_size="60000"/>]]>
+</programlisting>
+
+<para>
+The configurable attributes in the FRAG2 element are as follows.
+</para>
+
+<itemizedlist>
+   <listitem><para><emphasis role="bold">frag_size</emphasis> specifies the max frag size in bytes. Messages larger than that are fragmented. For stacks
+   using the UDP transport, this needs to be a value less than 64KB, the maximum UDP datagram size. For TCP-based stacks
+   it needs to be less than the value of max_credits in the FC protocol.</para></listitem>
+</itemizedlist>
+
+<note><title>Note</title>
+   <para>
+      TCP protocol already provides fragmentation but a JGroups fragmentation protocol is still needed if FC is used. The reason for this is that if you send a message larger than FC.max_credits, the FC protocol will block forever. So, frag_size within FRAG2 needs to be set to always be less than FC.max_credits.
+   </para>
+</note>
+
+
+</section>
+   
+        <section id="jgroups-other-st">
+          <title>State Transfer</title>
+          <para>The state transfer service requests the application state (serialized as a byte array) from an existing node (i.e., the cluster
+                        coordinator) and transfer it to a newly joining node. It tracks the sequence of messages that
+                        went into creating the application state, providing a valid starting point for message tracking by
+                        reliable delivery protocols like NAKACK and UNICAST. It is configured in the
+                        <literal>pbcast.STATE_TRANSFER</literal> sub-element under the JGroups <literal>config</literal>
+                        element. It does not have any configurable attribute. Here is an example configuration.</para>
+<programlisting>
+&lt;pbcast.STATE_TRANSFER/&gt;
+</programlisting>
+        </section>
+
+   <section id="jgroups-other-gc">
+          <title>Distributed Garbage Collection (STABLE)</title>
+          <para>
+        In a JGroups cluster, all nodes have to store all messages received for potential retransmission in case of a failure. However, if we store all messages forever, we will run out of memory. So, the distributed garbage collection service in JGroups periodically purges messages that have seen by all nodes from the memory in each node. The distributed garbage  collection service is configured in the <literal>pbcast.STABLE</literal> sub-element under the JGroups  <literal>config</literal> element. Here is an example configuration.
+     </para>
+
+<programlisting>
+&lt;pbcast.STABLE stability_delay="1000"
+    desired_avg_gossip="5000" 
+    max_bytes="400000"/&gt;
+</programlisting>
+          
+<para>The configurable attributes in the <literal>pbcast.STABLE</literal> element are as follows.</para>
+          <itemizedlist>
+            <listitem>
+              <para><emphasis role="bold">desired_avg_gossip</emphasis> specifies intervals (in
+                                milliseconds) of garbage collection runs. Value <literal>0</literal> disables 
+                                interval-based execution of garbage collection.</para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">max_bytes</emphasis> specifies the maximum number of bytes
+                                received before the cluster triggers a garbage collection run. Value
+                                <literal>0</literal> disables execution of garbage collection
+                                based on bytes received.</para>
+            </listitem>
+            <listitem>
+          <para><emphasis role="bold">stability_delay</emphasis> specifies the maximum amount (in milliseconds) of a random delay introduced before a node sends its STABILITY msg
+           at the end of a garbage collection run. The delay gives other nodes concurrently running a STABLE task a change to send first. If used together with max_bytes, this attribute should be set to a small number.</para>
+            </listitem>
+          </itemizedlist>
+          <note>
+            <para>Set the <literal>max_bytes</literal> attribute when you have a high traffic
+                        cluster.</para>
+          </note>
+        </section>
+        <section id="jgroups-other-merge">
+          <title>Merging (MERGE2)</title>
+          <para>
+        When a network error occurs (e.g. a crashed switch), the cluster might be partitioned into several different sub-groups. JGroups has "merge" protocols that allow the coordinators in the sub-groups to communicate with each other (once the network heals) and merge back into a single group again. This service is configured in the <literal>MERGE2</literal> sub-element under the JGroups <literal>config</literal> element. Here is an example configuration.
+      </para>
+
+<programlisting>
+&lt;MERGE2 max_interval="100000"
+    min_interval="20000"/&gt;
+</programlisting>
+      
+      
+          <para>The configurable attributes in the <literal>FC</literal> element are as follows.</para>
+          <itemizedlist>
+            <listitem>
+              <para><emphasis role="bold">max_interval</emphasis> specifies the maximum number of
+                                milliseconds to wait before sending out a MERGE message.</para>
+            </listitem>
+            <listitem>
+              <para><emphasis role="bold">min_interval</emphasis> specifies the minimum number of
+                                milliseconds to wait before send out a MERGE message.</para>
+            </listitem>
+          </itemizedlist>
+          <para>JGroups chooses a random value between <literal>min_interval</literal> and
+                    <literal>max_interval</literal> to periodically send out the MERGE message.</para>
+          <note>
+        <para>
+           The application state maintained by the application using a channel is not merged by JGroups during a merge. This has to be done by the application.</para> 
+           </note>
+        <note>
+           <para>If <literal>MERGE2</literal> is used in conjunction with TCPPING, the <literal>initial_hosts</literal> attribute must contain all the nodes that could potentially be merged back, in order for the merge process to work properly. Otherwise, the merge process may not detect all sub-groups, missing those comprised solely of unlisted members.</para>
+          </note>
+        </section>
+
+      
+</section>
+      
+      <section id="jgroups-other">
+        <title>Key JGroups Configuration Tips</title>
+	
+	<section><title>Binding JGroups Channels to a Particular Interface</title>
+		<para>
+			In the Transport Protocols section above, we briefly touched on how the interface to which JGroups will bind sockets is configured. Let's get into this topic in more depth:
+		</para>
+		<para>
+			First, it's important to understand that the value set in any <literal>bind_addr</literal> element in an XML configuration file will be ignored by JGroups if it finds that system property <literal>jgroups.bind_addr</literal> (or a deprecated earlier name for the same thing, <literal>bind.address</literal>) has been set. The system property trumps XML. If JBoss AS is started with the <literal>-b</literal> (a.k.a. <literal>--host</literal>) switch, the AS will set <literal>jgroups.bind_addr</literal> to the specified value.
+		</para>
+		<para>
+			Beginning with AS 4.2.0, for security reasons the AS will bind most services to localhost if <literal>-b</literal> is not set. The effect of this is that in most cases users are going to be setting <literal>-b</literal> and thus <literal>jgroups.bind_addr</literal> is going to be set and any XML setting will be ignored.
+		</para>
+		<para>
+			So, what are <emphasis>best practices</emphasis> for managing how JGroups binds to interfaces?
+		</para>
+		<itemizedlist>
+			<listitem>
+				<para>
+			Binding JGroups to the same interface as other services.  Simple, just use <literal>-b</literal>:
+		<screen>./run.sh -b 192.168.1.100 -c all</screen>
+	</para>
+</listitem>
+<listitem>
+	<para>
+			Binding services (e.g., JBoss Web) to one interface, but use a different one for JGroups:
+		<screen>./run.sh -b 10.0.0.100 -Djgroups.bind_addr=192.168.1.100 -c all</screen>
+		
+			Specifically setting the system property overrides the <literal>-b</literal> value. This is a common usage pattern; put client traffic on one network, with intra-cluster traffic on another.
+		</para>
+	</listitem>
+	<listitem>
+	<para>
+			
+			Binding services (e.g., JBoss Web) to all interfaces.  This can be done like this:
+		<screen>./run.sh -b 0.0.0.0 -c all</screen>
+		However, doing this will not cause JGroups to bind to all interfaces! Instead , JGroups will bind to the machine's default interface.  See the Transport Protocols section for how to tell JGroups to receive or send on all interfaces, if that is what you really want.
+	</para>
+	</listitem>
+	<listitem>
+	<para>	
+		Binding services (e.g., JBoss Web) to all interfaces, but specify the JGroups interface:
+		<screen>./run.sh -b 0.0.0.0 -Djgroups.bind_addr=192.168.1.100 -c all</screen>
+		
+			Again, specifically setting the system property overrides the <literal>-b</literal> value.
+		</para>
+	</listitem>
+	<listitem>
+	<para>	
+		Using different interfaces for different channels:
+		<screen>./run.sh -b 10.0.0.100 -Djgroups.ignore.bind_addr=true -c all</screen>
+	</para>
+	</listitem>
+</itemizedlist>
+
+<para>
+This setting tells JGroups to ignore the <literal>jgroups.bind_addr</literal> system property, and instead use whatever is specfied in XML. You would need to edit the various XML configuration files to set the various <literal>bind_addr</literal> attributes to the desired interfaces.	
+		</para>
+	</section>
+	
+	<section id="clustering-jgroups-isolation"><title>Isolating JGroups Channels</title>
+		<para>
+			Within JBoss AS, there are a number of services that independently create JGroups channels -- possibly multiple different JBoss Cache services (used for HttpSession replication, EJB3 SFSB replication and EJB3 entity replication), two JBoss Messaging channels, and the general purpose clustering service called HAPartition that underlies most other JBossHA services.
+		</para>
+		<para>
+			It is critical that these channels only communicate with their intended peers; not with the channels used by other services and not with channels for the same service opened on machines not meant to be part of the group. Nodes improperly communicating with each other is one of the most common issues users have with JBoss AS clustering.
+		</para>
+		<para>
+			Whom a JGroups channel will communicate with is defined by its group name and, for UDP-based channels, its multicast address and port. So isolating JGroups channels comes down to ensuring different channels use different values for the group name, the multicast address and, in some cases, the multicast port.
+		</para>
+      
+      <section>
+      <title>Isolating Sets of AS Instances from Each Other</title>
+      
+      <para>The issue being addressed here is the case where, in the
+      same environment, you have multiple independent clusters running. For example, 
+      a production cluster, a staging cluster and a QA cluster. Or multiple 
+      clusters in a QA test lab or in a dev team environment. Or a large set of 
+      production machines divided into multiple clusters.</para>
+      
+      <para>
+         To isolate JGroups clusters from other clusters on the network, you need to:
+      </para>
+      
+      <itemizedlist>
+        <listitem><para>Make sure the channels in the various clusters use different group names. This is easily to control from the command line arguments used to start JBoss; see <xref linkend="clustering-jgroups-isolation-group-name"/>.</para></listitem>
+        <listitem><para>Make sure the channels in the various clusters use different multicast addresses. This is also easy to control from the command line arguments used to start JBoss; see <xref linkend="clustering-jgroups-isolation-mcast_addr"/>.</para></listitem>
+             
+        <listitem><para>If you are not running on Linux, Windows, Solaris or HP-UX, you may 
+          also need to ensure that the channels in each cluster use different 
+         multicast ports. This is quite a bit more troublesome then using different
+         group names, although it can still be controlled from the command line. 
+         See <xref linkend="clustering-jgroups-isolation-mcast_port"/>. Note
+         that using different ports should not be necessary if your servers are
+         running on Linux, Windows, Solaris or HP-UX.</para>
+      </listitem>
+      </itemizedlist>
+      </section>
+      
+      <section>
+      <title>Isolating Channels for Different Services on the Same Set of AS Instances</title>
+      
+      <para>The issue being addressed here is the normal case where 
+      we have a cluster of 3 machines, each of which 
+      has, for example, an HAPartition deployed along with a JBoss Cache used for web session 
+      clustering. The HAPartition channels should not communicate with the 
+      JBoss Cache channels. Ensuring proper isolation of these channels is straightforward, 
+      and generally speaking the AS handles it for you without any special effort 
+      on your part. So most readers can skip this section. </para>
+		
+      <para>
+			To isolate JGroups channels for different services on the same set of AS instances from each other, 
+         each channel must have its own group name. The configurations that ship
+         with JBoss AS of course ensure that this is the case. If you create a custom service 
+         that directly uses JGroups, just make sure you use a unique group name. 
+         If you create a custom JBoss Cache configuration, make sure you provide 
+         a unique value in the <literal>clusterName</literal> configuration property. 
+		</para>
+      
+		<para>
+			In releases prior to AS 5, different channels running in the same AS also had to use unique multicast ports.
+         With the JGroups shared transport introduced in AS 5 (see 
+         <xref linkend="clustering-blocks-jgroups-sharedtransport"/>), it is
+         now common for multiple channels to use the same tranpsort protocol and its sockets.
+         This makes configuration easier, which is one of the main benefits of the shared
+         transport. However, if you decide to create your own custom JGroups protocol
+         stack configuration, be sure to configure its transport protocols with a multicast port
+         that is different from the ports used in other protocol stacks.
+		</para>
+      </section>
+	
+	<section id="clustering-jgroups-isolation-group-name"><title>Changing the Group Name</title>
+		<para>
+			The group name for a JGroups channel is configured via the service that 
+         starts the channel. For all the standard clustered services, we make it easy 
+         for you to create unique groups names by simply using the <literal>-g</literal> (a.k.a. <literal>--partition</literal>) 
+         switch when starting JBoss:
+			<screen>./run.sh -g QAPartition -b 192.168.1.100 -c all</screen> 
+			This switch sets the <literal>jboss.partition.name</literal> system property, 
+         which is used as a component in the configuration of the group name in 
+         all the standard clustering configuration files. For example, 
+<programlisting><![CDATA[<property name="clusterName">${jboss.partition.name:DefaultPartition}-SFSBCache</property>]]></programlisting>
+		</para>
+	</section>
+	
+	
+	
+<section id="clustering-jgroups-isolation-mcast_addr"><title>Changing the Multicast Address</title>
+	<para>
+		The <literal>-u</literal> (a.k.a. <literal>--udp</literal>) command line switch may be used to control the multicast address used by the JGroups channels opened by all standard AS services.
+<screen><![CDATA[/run.sh -u 230.1.2.3 -g QAPartition -b 192.168.1.100 -c all]]></screen>
+		This switch sets the <literal>jboss.partition.udpGroup</literal> system property, 
+      which you can see referenced in all of the standard protocol stack configurations in JBoss AS: 
+	</para>
+	
+<programlisting><![CDATA[<UDP mcast_addr="${jboss.partition.udpGroup:228.1.2.3}" ....]]></programlisting>
+   
+	<note>
+   <title>Why isn't it sufficient to change the group name?</title>
+<para>
+			     If channels with different group names share the same multicast address and port, the lower level JGroups protocols in each channel will see, process and eventually discard messages intended for the other group. This will at a minimum hurt performance and can lead to anomalous behavior.
+		     </para>
+           </note>
+   </section>
+   
+   <section  id="clustering-jgroups-isolation-mcast_port">
+   <title>Changing the Multicast Port</title>
+<para>
+           On some operating systems (Mac OS X for example), using different 
+           <literal>-g</literal> and <literal>-u</literal> values isn't sufficient 
+           to isolate clusters; the channels running in the different clusters 
+           need to use different multicast ports.  Unfortunately, setting the 
+           multicast ports is not quite as simple as <literal>-g</literal> and 
+           <literal>-u</literal>. By default, a JBoss AS instance
+           running the all configuration will use up to two different instances of
+           the JGroups UDP transport protocol, and will thus open two
+           multicast sockets. You can control the ports those sockets use
+           by using system properties on the command line. For example,
+        </para>
+<programlisting>
+/run.sh -u 230.1.2.3 -g QAPartition -b 192.168.1.100 -c all \\
+        -Djboss.jgroups.udp.mcast_port=12345 -Djboss.messaging.datachanneludpport=23456
+</programlisting>
+
+   <para>The <literal>jboss.messaging.datachanneludpport</literal> property controls
+   the multicast port used by the MPING protocol in JBoss Messaging's DATA channel.
+   The <literal>jboss.jgroups.udp.mcast_port</literal> property controls the
+   multicast port used by the UDP transport protocol shared by all other clustered services.</para>
+   
+   <para>The set of JGroups protocol stack configurations included in the 
+   <literal>$JBOSS_HOME/server/all/cluster/jgroups-channelfactory.sar/META-INF/jgroups-channelfactory-stacks.xml</literal>
+   file includes a number of other example protocol stack configurations that
+   the standard AS distribution doesn't actually use. Those configurations also
+   use system properties to set any multicast ports. So, if you reconfigure some
+   AS service to use one of those protocol stack configurations, just use the
+   appropriate system property to control the port from the command line.
+   </para>
+	<note><title>Why do I need to change the multicast port if I change the address?</title>
+		<para>
+			It should be sufficient to just change the address, but unfortunately the 
+         handling of multicast sockets is one area where the JVM fails to hide 
+         OS behavior differences from the application. The <literal>java.net.MulticastSocket</literal> 
+         class provides different overloaded constructors. On some operating 
+         systems, if you use one constructor variant, there is a problem whereby 
+         packets addressed to a particular multicast port are delivered to all 
+         listeners on that port, regardless of the multicast address on which they are 
+         listening. We refer to this as the "promiscuous traffic" problem.
+         On most operating systems that exhibit the promiscuous traffic problem
+         (i.e. Linux, Solaris and HP-UX) JGroups can use a different constructor 
+         variant that avoids the problem. However, on some OSs with the
+         promiscuous traffic problem (e.g. Mac OS X), multicast does not work
+         properly if the other constructor variant is used. So, on these
+         operating systems the recommendation is to configure different
+         multicast ports for different clusters.
+		</para>
+      </note>
+</section>
+   </section>
+   
+   <section id="jgroups-perf-udpbuffer">
+       <title>Improving UDP Performance by Configuring OS UDP Buffer Limits</title>
+       <para>By default, the JGroups channels in JBoss AS use the UDP transport
+       protocol in order to take advantage of IP multicast. However, one disadvantage 
+       of UDP is it does not come with the reliable delivery guarantees 
+       provided by TCP. The protocols discussed in 
+       <xref linkend="jgroups-reliable"/> allow JGroups to guarantee delivery of
+       UDP messages, but those protocols are implemented in Java, not at the
+       OS network layer. To get peak performance from a UDP-based JGroups
+       channel it is important to limit the need for JGroups to retransmit messages
+       by limiting UDP datagram loss.</para>
+       
+       <para>One of the most common causes of lost UDP datagrams is an undersized receive
+       buffer on the socket. The UDP protocol's <literal>mcast_recv_buf_size</literal>
+       and <literal>ucast_recv_buf_size</literal> configuration attributes
+       are used to specify the amount of receive buffer JGroups <emphasis>requests</emphasis>
+       from the OS, but the actual size of the buffer the OS will provide 
+       is limited by OS-level maximums. These maximums are often very low:</para>
+       
+       <table frame="topbot">
+       <title>Default Max UDP Buffer Sizes</title>
+       <tgroup cols="2">
+        <thead><row><entry>Operating System</entry><entry>Default Max UDP Buffer (in bytes)</entry></row></thead>
+        <tbody>
+            <row><entry>Linux</entry><entry>131071</entry></row>
+            <row><entry>Windows</entry><entry>No known limit</entry></row>
+            <row><entry>Solaris</entry><entry>262144</entry></row>
+            <row><entry>FreeBSD, Darwin</entry><entry>262144</entry></row>
+            <row><entry>AIX</entry><entry>1048576</entry></row>
+        </tbody>
+        </tgroup>
+       </table>
+       
+       <para>The command used to increase the above limits is OS-specific. The table
+       below shows the command required to increase the maximum buffer to 25MB.
+       In all cases root privileges are required:</para>
+       
+       <table frame="topbot">
+       <title>Commands to Change Max UDP Buffer Sizes</title>
+       <tgroup cols="2">
+        <thead><row><entry>Operating System</entry><entry>Command</entry></row></thead>
+        <tbody>
+            <row><entry>Linux</entry><entry><literal>sysctl -w net.core.rmem_max=26214400</literal></entry></row>
+            <row><entry>Solaris</entry><entry><literal>ndd -set /dev/udp udp_max_buf 26214400</literal></entry></row>
+            <row><entry>FreeBSD, Darwin</entry><entry><literal>sysctl -w kern.ipc.maxsockbuf=26214400</literal></entry></row>
+            <row><entry>AIX</entry><entry><literal>no -o sb_max=8388608</literal> (AIX will only allow 1MB, 4MB or 8MB).</entry></row>
+        </tbody>
+        </tgroup>
+       </table>
+   </section>
+	</section>
+	
+<section><title>JGroups Troubleshooting</title>
+   <section>
+	<title>Nodes do not form a cluster</title>
+	
+	<para>
+		Make sure your machine is set up correctly for IP multicast. There are 2 test programs that can be used to detect this: McastReceiverTest and McastSenderTest. Go to the <literal>$JBOSS_HOME/server/all/lib</literal> directory and start McastReceiverTest, for example:
+<screen>java -cp jgroups.jar org.jgroups.tests.McastReceiverTest -mcast_addr 224.10.10.10 -port 5555 </screen>
+</para>
+
+<para>
+Then in another window start <literal>McastSenderTest</literal>:
+<screen>java -cp jgroups.jar org.jgroups.tests.McastSenderTest -mcast_addr 224.10.10.10 -port 5555</screen>
+</para>
+
+<para>
+	If you want to bind to a specific network interface card (NIC), use <literal>-bind_addr 192.168.0.2</literal>, where 192.168.0.2 is the IP address of the NIC to which you want to bind. Use this parameter in both the sender and the receiver.
+</para>
+<para>
+	You should be able to type in the <literal>McastSenderTest</literal> window and see the output in the <literal>McastReceiverTest</literal> window. If not, try to use -ttl 32 in the sender. If this still fails, consult a system administrator to help you setup IP multicast correctly, and ask the admin to make sure that multicast will work on the interface you have chosen or, if the machines have multiple interfaces, ask to be told the correct interface.
+Once you know multicast is working properly on each machine in your cluster, you can repeat the above test to test the network, putting the sender on one machine and the receiver on another.
+		
+	</para>
+</section>
+	
+<section><title>Causes of missing heartbeats in FD</title>
+	<para>
+		Sometimes a member is suspected by FD because a heartbeat ack has not been received for some time T (defined by timeout and max_tries). This can have multiple reasons, e.g. in a cluster of A,B,C,D; C can be suspected if (note that A pings B, B pings C, C pings D and D pings A):
+	</para>
+	
+	<itemizedlist>
+		<listitem>
+			<para>
+			B or C are running at 100% CPU for more than T seconds. So even if C sends a heartbeat ack to B, B may not be able to process it because it is at 100%
+			</para>
+		</listitem>
+		<listitem>
+			<para>
+			B or C are garbage collecting, same as above.
+			</para>
+		</listitem>
+		<listitem>
+			<para>
+			A combination of the 2 cases above
+			</para>
+		</listitem>
+		<listitem>
+			<para>
+			The network loses packets. This usually happens when there is a lot of traffic on the network, and the switch starts dropping packets (usually broadcasts first, then IP multicasts, TCP packets last).
+			</para>
+		</listitem>
+		<listitem>
+			<para>
+			B or C are processing a callback. Let's say C received a remote method call  over its channel and takes T+1 seconds to process it. During this time, C will not process any other messages, including heartbeats, and therefore B will not receive the heartbeat ack and will suspect C.
+		</para>
+	</listitem>
+</itemizedlist>
+
+</section>
+</section>
+
+  </chapter>

@@ -1,0 +1,82 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd">
+
+   <chapter id="Dynamic_Security_Domains">
+      <title>Dynamic Security Domains</title>
+      <para>
+         Historically, the Enterprise Application Platform used the static <filename>$JBOSS_HOME/server/<replaceable>$PROFILE</replaceable>/conf/login-config.xml</filename> file to configure the security             domain. Dynamic configuration was provided with the introduction of the DynamicLoginConfig security service. This functionality allowed you to specify a Java Authentication and Authorization Service         (JAAS) as part of an application deployment, rather than having to include the configuration information in <filename>login-config.xml</filename>.
+      </para>
+
+      <para>
+         JBoss AS 6 now provides an additional, simplified mechanism to configure security domains.
+      </para>
+
+      <para>
+         In JBoss AS, the security domain configuration is important for the authentication, authorization, auditing, and mapping functionality associated with Java EE components such a Web or EJBs.
+      </para>
+
+      <para>
+         The latest security implementation allows you to create a logically-named deployment descriptor file and specify the security domains within the file. The deployment descriptor can be deployed               directly in the deploy folder, or packaged as part of the application JAR or WAR file.
+      </para>
+
+      <procedure>
+         <title>Security Domain Deployment Descriptor</title>
+         <para>
+            Follow this procedure to configure a security domain deployment descriptor with two domains named web-test and ejb-test.
+         </para>
+
+         <step>
+            <title>Create deployment descriptor</title>
+            <para>
+               You must create a deployment descriptor file to contain the security domain configuration.
+            </para>
+
+            <para>
+               The filename takes the format <filename><replaceable>[domain_name]</replaceable>-jboss-beans.xml</filename>. The <replaceable>domain_name</replaceable> is arbitrary, however you should choose                a name that is meaningful to the application.
+            </para>
+
+            <para>
+               The file must contain the standard XML declaration, and a correctly configured <sgmltag>&lt;deployment&gt;</sgmltag> element.
+            </para>
+
+            <programlisting language="XML" role="XML">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+
+&lt;deployment xmlns=&quot;urn:jboss:bean-deployer:2.0&quot;&gt;
+
+
+&lt;/deployment&gt;
+            </programlisting>
+         </step>
+
+         <step>
+            <title>Define application policies</title>
+            <para>
+               Within the <sgmltag>&lt;deployment&gt;</sgmltag> element, the individual application policies are defined. Each policy specifies the login module to use, and any required options.
+            </para>
+
+            <para>
+               In the example below, two application policies are specified. Each policy uses the same login module, and module parameters.
+            </para>
+
+            <note>
+               <para>
+                  Other login modules are available for use with the Enterprise Application Platform.  For more information about the available  login modules, refer to                                                         <xref linkend="JBoss_Login_Modules"/>
+               </para>
+            </note>
+
+            <programlisting language="XML" role="XML"><xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="extras/jboss-beans.xml_sample" parse="text"/>
+            </programlisting>
+         </step>
+
+         <step>
+            <title>Deploy or package the deployment descriptor</title>
+            <para>
+               Move the deployment descriptor file to the <filename>deploy</filename> directory of the required server profile in your installation.
+            </para>
+
+            <para>
+               Alternatively, package the deployment descriptor in the <filename>META-INF</filename> directory of the EJB Jar, or the  <filename>WEB-INF</filename> directory of your web application (WAR).
+            </para>
+         </step>
+      </procedure>
+   </chapter>

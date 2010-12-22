@@ -1,0 +1,233 @@
+<?xml version='1.0'?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+	  ]>
+
+<chapter id="pooling">
+<title>Pooling</title>
+<section><title>Strategy</title>
+<para>
+        <indexterm><primary>Pooling</primary><secondary>JBossJCA</secondary></indexterm>
+<ulink url="http://www.jboss.org/wiki/JBossJCA">JBossJCA</ulink> uses a <literal>ManagedConnectionPool</literal> to perform the pooling. The  <literal>ManagedConnectionPool</literal> is made up of subpools depending upon the strategy chosen and other pooling parameters.
+</para>
+
+<informaltable frame="all">
+<tgroup cols="5"><tbody>
+<row>
+<entry>
+<para>xml</para>
+</entry>
+<entry>
+<para>mbean</para>
+</entry>
+<entry>
+<para>Internal Name</para>
+</entry>
+<entry>
+<para>Description</para>
+</entry>
+<entry>
+<para/>
+</entry>
+</row>
+<row>
+<entry>
+<para/>
+</entry>
+<entry>
+<para>ByNothing</para>
+</entry>
+<entry>
+<para>OnePool</para>
+</entry>
+<entry>
+<para>A single pool of equivalent connections</para>
+</entry>
+<entry>
+<para/>
+</entry>
+</row>
+<row>
+<entry>
+<para>&lt;application-managed-security/&gt;</para>
+</entry>
+<entry>
+<para>ByApplication</para>
+</entry>
+<entry>
+<para>PoolByCRI</para>
+</entry>
+<entry>
+<para>Use the connection properties from allocateConnection()</para>
+</entry>
+<entry>
+<para/>
+</entry>
+</row>
+<row>
+<entry>
+<para>&lt;security-domain/&gt;</para>
+</entry>
+<entry>
+<para>ByContainer</para>
+</entry>
+<entry>
+<para>PoolBySubject</para>
+</entry>
+<entry>
+<para>A pool per Subject, e.g. preconfigured or EJB/Web login subjects</para>
+</entry>
+<entry>
+<para/>
+</entry>
+</row>
+<row>
+<entry>
+<para>&lt;security-domain-and-applicaton/&gt;</para>
+</entry>
+<entry>
+<para>ByContainerAndApplicaton</para>
+</entry>
+<entry>
+<para>PoolBySubjectAndCri</para>
+</entry>
+<entry>
+<para>A per Subject and connection property combination</para>
+</entry>
+<entry>
+<para/>
+</entry>
+</row></tbody></tgroup>
+</informaltable>
+
+<note><title>Note</title>
+<para>The xml names imply this is just about security. This is misleading. </para>
+</note>
+
+<para>
+For &lt;security-domain-and-application/&gt; the Subject always overrides any user/password from createConnection(user, password) in the CRI: </para>
+
+<screen>(
+ConnectionRequestInfo
+) </screen>
+</section>
+
+
+<section><title>Transaction stickness</title>
+<para>
+You can force the same connection from a (sub-)pool to get reused throughout a transaction with the &lt;track-connection-by-tx/&gt; flag
+</para>
+
+<note><title>Note</title>
+<para>This is the only supported behaviour for <emphasis>"local"</emphasis> transactions. This element is deprecated in JBoss-5.x where transaction stickiness is enabled by default. XA users can explicitly enable interleaving with &lt;interleaving/&gt; element.</para>
+</note>
+</section>
+
+<section><title>Workaround for Oracle</title>
+<para>Oracle does not like XA connections getting used both inside and outside a JTA transaction. To workaround the problem you can create separate sub-pools for the different contexts using &lt;no-tx-separate-pools/&gt;.</para>
+</section>
+
+<section><title>Pool Access</title>
+<para>
+The pool is designed for concurrent usage.
+</para>
+
+<para>
+Upto &lt;max-pool-size/&gt; threads can be inside the pool at the same time (or using connections from a pool).
+</para>
+<para>
+Once this limit is reached, threads wait for the &lt;blocking-timeout-seconds/&gt; to use the pool before throwing a <ulink url="http://www.jboss.org/wiki/WhatDoesTheMessageNoManagedConnectionsAvailableMean">No Managed Connections Available</ulink>
+</para>
+</section>
+
+<section><title>Pool Filling</title>
+<para>
+The number of connections in the pool is controlled by the pool sizes.
+</para>
+<itemizedlist>
+<listitem>
+<para>&lt;min-pool-size/&gt; - When the number of connections falls below this size, new connections are created</para>
+</listitem>
+<listitem>
+<para>&lt;max-pool-size/&gt; - No more than this number of connections are created</para>
+</listitem>
+<listitem>
+<para>&lt;prefill/&gt; - Feature Request has been implemented for 4.0.5. Note: the only pooling strategy that supports this feature is OnePool?, or ByNothing? pooling criteria.</para>
+</listitem>
+</itemizedlist>
+<para>
+The pool filling is done by a separate "Pool Filler" thread rather than blocking application threads.</para>
+</section>
+
+<section><title>Idle Connections</title>
+<para>
+You can configure connections to be closed when they are idle. e.g. If you just had a peak period and now want to reap the unused ones. This is done via the &lt;idle-timeout-minutes/&gt;.</para>
+
+<para>
+Idle checking is done on a separate "Idle Remover" thread on an LRU (least recently used) basis. The check is done every idle-timeout-minutes divided by 2 for connections unused for idle-timeout-minutes.</para>
+<para>
+The pool itself operates on an MRU (most recently used) basis. This allows the excess connections to be easily identified.
+</para>
+<para>
+Should closing idle connections cause the pool to fall below the min-pool-size, new/fresh connections are created.
+</para>
+<note><title>Note</title>
+<para>If you have long running transactions and you use interleaving (i.e. don't track-connection-by-tx) make sure the idle timeout is greater than the transaction timeout. When interleaving the connection is returned to the pool for others to use. If however nobody does use it, it would be a candidate for removal before the transaction is committed.
+</para>
+</note>
+</section>
+
+<section><title>Dead connections</title>
+<para>
+The JDBC protocol does not provide a natural <literal>connectionErrorOccured()</literal> event when a connection is broken. To support dead/broken connection checking there are a number of plugins.</para>
+
+<section><title>Valid connection checking</title>
+<para>
+The simplest format is to just run a "quick" sql statement:
+
+<screen>&lt;check-valid-connection-sql&gt;select 1 from dual&lt;/check-valid-connection-sql&gt;</screen>
+
+before handing the connection to the application. If this fails, another connection is selected until there are no more connections at which point new connections are constructed.
+</para>
+
+<para>
+The potentially more performant check is to use vendor specific features, e.g. Oracle's or MySQL's pingDatabase() via the
+<screen>&lt;valid-connection-checker-class-name/&gt;</screen>
+</para>
+</section>
+
+<section><title>Errors during SQL queries</title>
+<para>
+You can check if a connection broke during a query by the looking the error codes or messages of the SQLException for FATAL errors rather than normal SQLExceptions. These codes/messages can be vendor specific, e.g.
+<screen>&lt;exception-sorter-class-name&gt;org.jboss.resource.adapter.jdbc.vendor.OracleExceptionSorter&lt;/exception-sorter-class-name&gt;</screen>
+
+For
+
+<screen>FATAL</screen>
+
+errors the connection will be closed.</para>
+</section>
+
+<section><title>Changing/Closing/Flushing the pool</title>
+
+<itemizedlist>
+<listitem>
+<para><ulink url="http://www.jboss.org/wiki/HowDoIChangeThePoolingParameters">change or flush()</ulink> the pool</para>
+</listitem>
+<listitem>
+<para>closing/undeploying the pool will do a flush first</para>
+</listitem>
+</itemizedlist>
+
+</section>
+
+<section><title>Other pooling</title>
+<para><ulink url="http://www.jboss.org/wiki/IWantToPluginACustomThirdpartyDataSource">Thirdparty Pools</ulink> - only if you know what you are doing</para>
+
+</section>
+</section>
+
+
+
+
+
+</chapter>

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<deployment xmlns="urn:jboss:bean-deployer:2.0">
+
+   <application-policy xmlns="urn:jboss:security-beans:1.0" name="test-domain">
+     <authentication>
+        <login-module code = "org.jboss.security.auth.spi.UsersRolesLoginModule"
+            flag = "required">
+            <module-option name = "unauthenticatedIdentity">anonymous</module-option>
+            <module-option name="usersProperties">u.properties</module-option>
+            <module-option name="rolesProperties">r.properties</module-option>
+         </login-module>
+      </authentication>
+      <authorization>
+         <policy-module code="org.jboss.security.authorization.modules.JACCAuthorizationModule" flag="required"/>
+      </authorization>
+   </application-policy>  
+
+
+</deployment>

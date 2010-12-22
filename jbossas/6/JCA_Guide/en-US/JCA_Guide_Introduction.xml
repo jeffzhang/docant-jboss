@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd">
+
+<chapter id="jca-intro.chapt">
+  <title>JCA Introduction</title>
+  <section id="jca_introduce">
+   <title>JCA Overview</title>
+    
+   <para>The Java Connector Architecture (JCA) defines a standard architecture for connecting
+     the Java EE platform to heterogeneous Enterprise Information Systems (EIS). 
+     Examples of EISs include Enterprise Resource Planning (ERP), mainframe transaction processing (TP), 
+     databases and messaging systems.</para>
+
+   <para>The connector architecture defines a set of scalable, secure, and transactional
+     mechanisms that enable the integration of EISs with application servers and
+     enterprise applications.</para>
+    
+   <para>The connector architecture also defines a Common Client Interface (CCI) for EIS
+     access. The CCI defines a client API for interacting with heterogeneous EISs.</para>
+
+   <para>The connector architecture enables an EIS vendor to provide a standard resource
+     adapter for its EIS. A resource adapter is a system-level software driver that is used
+     by a Java application to connect to an EIS. The resource adapter plugs into an
+     application server and provides connectivity between the EIS, the application server,
+     and the enterprise application. The resource adapter serves as a protocol adapter
+     that allows any arbitrary EIS communication protocol to be used for connectivity.
+     An application server vendor extends its system once to support the connector
+     architecture and is then assured of seamless connectivity to multiple EISs. Likewise,
+     an EIS vendor provides one standard resource adapter which has the capability to
+     plug in to any application server that supports the connector architecture.</para>
+
+  </section>
+
+  <section id="jca_whatsnew">
+    <title>What's New</title>
+
+    <para>New feature:</para>
+    <itemizedlist spacing="compact">
+      <listitem>
+        How the JCA layer registers XA datasource for XA Resource Recovery with the JBoss TS project. See
+<xref linkend="XARecoveryinJCA" />.
+      </listitem>
+    </itemizedlist>
+  </section>
+</chapter>
+

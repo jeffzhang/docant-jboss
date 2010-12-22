@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE book PUBLIC "-//OASIS//DTD DocBook XML V4.3//EN" "http://www.oasis-open.org/docbook/xml/4.3/docbookx.dtd">
+<book>
+  
+<xi:include href="Book_Info.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+
+ 
+<part id="Introduction">
+   <title>Introduction and Quick Start</title>
+   <xi:include href="JSF_Guide_Introduction.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+   <xi:include href="JSF_Quick_Start.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />   
+</part>
+
+<part id="JSF_Config">
+  <title>Configuration</title>
+  <xi:include href="JSF_Deployment.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="JSF_and_Serialization.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+</part>
+
+<part id="JSF_Reference">
+  <title>Reference</title>
+  <xi:include href="JSF_Guide_Reference.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+</part>
+
+</book>
