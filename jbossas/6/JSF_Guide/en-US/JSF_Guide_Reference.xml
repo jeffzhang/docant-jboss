@@ -1,0 +1,515 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.3//EN" "http://www.oasis-open.org/docbook/xml/4.3/docbookx.dtd">
+
+  <chapter id="jsf.reference">
+    <title>Reference</title>
+
+      <section id="standard.config.params">
+        <title>JSF Standard Context Params</title>
+        <table>
+          <tgroup cols="4">
+            <colspec colnum="1" colname="col1" colwidth="6*"/>
+            <colspec colnum="2" colname="col2" colwidth="1*"/>
+            <colspec colnum="3" colname="col3" colwidth="4*"/>
+            <colspec colnum="4" colname="col4" colwidth="2*"/>
+
+            <thead>
+              <row>
+                <entry>Context Param</entry>
+                <entry>JSF Spec</entry>
+                <entry>Description</entry>
+                <entry>Default Value</entry>
+              </row>
+            </thead>
+            <tbody>
+              <row>
+                <entry>javax.faces.CONFIG_FILES</entry>
+                <entry>1.2 and 2.0</entry>
+                <entry>Comma-delimited list of faces config files.</entry>
+                <entry>null</entry>
+              </row>
+              <row>
+                <entry>javax.faces.DEFAULT_SUFFIX</entry>
+                <entry>1.2 and 2.0</entry>
+                <entry>Change the default suffix for JSP views.</entry>
+                <entry>.jsp</entry>
+              </row>
+              <row>
+                <entry>javax.faces.LIFECYCLE_ID</entry>
+                <entry>1.2 and 2.0</entry>
+                <entry>ID for alternate Lifecycle implementations.</entry>
+                <entry>null</entry>
+              </row>
+              <row>
+                <entry>javax.faces.STATE_SAVING_METHOD</entry>
+                <entry>1.2 and 2.0</entry>
+                <entry>"server" or "client"</entry>
+                <entry>server</entry>
+              </row>
+              <row>
+                <entry>javax.faces.DATETIMECONVERTER _DEFAULT_TIMEZONE_IS _SYSTEM_TIMEZONE</entry>
+                <entry>2.0</entry>
+                <entry>Controls if DateTimeConverter instances use the system timezone (if true) or GMT (if false).</entry>
+                <entry>false</entry>
+              </row>
+              <row>
+                <entry>javax.faces.DATETIMECONVERTER _DEFAULT_TIMEZONE_IS _SYSTEM_TIMEZONE</entry>
+                <entry>2.0</entry>
+                <entry>Controls if DateTimeConverter instances use the system timezone (if true) or GMT (if false).</entry>
+                <entry>false</entry>
+              </row>
+              <row>
+                <entry>javax.faces.DISABLE_FACELET _JSF_VIEWHANDLER</entry>
+                <entry>2.0</entry>
+                <entry>Disables the built-in Facelet ViewHandler.  Useful for applications that use legacy Facelets implementation.</entry>
+                <entry>false</entry>
+              </row>
+              <row>
+                <entry>javax.faces.FACELETS_LIBRARIES</entry>
+                <entry>2.0</entry>
+                <entry>Semicolon-separated list of paths to Facelet tag libraries.</entry>
+                <entry>null</entry>
+              </row>
+              <row>
+                <entry>facelets.LIBRARIES</entry>
+                <entry>2.0</entry>
+                <entry>Semicolon-separated list of paths to Facelet tag libraries.  Used for backward-compatibility with legacy Facelets implementation.</entry>
+                <entry>null</entry>
+              </row>
+              <row>
+                <entry>javax.faces.FACELETS_BUFFER_SIZE</entry>
+                <entry>2.0</entry>
+                <entry>The buffer size set on the response.</entry>
+                <entry>-1 (no assigned buffer size)</entry>
+              </row>
+              <row>
+                <entry>facelets.BUFFER_SIZE</entry>
+                <entry>2.0</entry>
+                <entry>The buffer size set on the response.  Used for backward-compatibility with legacy Facelets implementation.</entry>
+                <entry>-1 (no assigned buffer size)</entry>
+              </row>
+              <row>
+                <entry>javax.faces.DECORATORS</entry>
+                <entry>2.0</entry>
+                <entry>Semicolon-delimited list of TagDecorator implementations.  See javadoc for javax.faces.view .facelets.TagDecorator.</entry>
+                <entry>null</entry>
+              </row>
+              <row>
+                <entry>facelets.DECORATORS</entry>
+                <entry>2.0</entry>
+                <entry>Semicolon-delimited list of TagDecorator implementations.  Used for backward-compatibility with legacy Facelets implementation.</entry>
+                <entry>null</entry>
+              </row>
+              <row>
+                <entry>javax.faces.FACELETS _REFRESH_PERIOD</entry>
+                <entry>2.0</entry>
+                <entry>Time in seconds that facelets should be checked for changes since last request.  A value of -1 disables refresh checking.</entry>
+                <entry>implementation-specific</entry>
+              </row>
+              <row>
+                <entry>facelets.REFRESH_PERIOD</entry>
+                <entry>2.0</entry>
+                <entry>Time in seconds that facelets should be checked for changes since last request.  A value of -1 disables refresh checking. Used for backward-compatibility with legacy Facelets implementation.</entry>
+                <entry>implementation-specific</entry>
+              </row>
+              <row>
+                <entry>javax.faces.FACELETS _RESOURCE_RESOLVER</entry>
+                <entry>2.0</entry>
+                <entry>An implementation of javax.faces .view.facelets .ResourceResolver.  See javadoc for details.</entry>
+                <entry>null</entry>
+              </row>
+              <row>
+                <entry>facelets.RESOURCE_RESOLVER</entry>
+                <entry>2.0</entry>
+                <entry>An implementation of javax.faces .view.facelets .ResourceResolver.  See javadoc for details.  Used for backward-compatibility with legacy Facelets implementation.</entry>
+                <entry>null</entry>
+              </row>
+              <row>
+                <entry>javax.faces.FACELETS_SKIP _COMMENTS</entry>
+                <entry>2.0</entry>
+                <entry>If true, strip XML comments out of Facelets before delivering to the client.</entry>
+                <entry>false</entry>
+              </row>
+              <row>
+                <entry>facelets.SKIP_COMMENTS</entry>
+                <entry>2.0</entry>
+                <entry>If true, strip XML comments out of Facelets before delivering to the client.  Used for backward-compatibility with legacy Facelets implementation.</entry>
+                <entry>false</entry>
+              </row>
+              <row>
+                <entry>javax.faces.FACELETS_SUFFIX</entry>
+                <entry>2.0</entry>
+                <entry>Set the suffix for Facelet xhtml files.</entry>
+                <entry>.xhtml</entry>
+              </row>
+              <row>
+                <entry>facelets.SUFFIX</entry>
+                <entry>2.0</entry>
+                <entry>Set the suffix for Facelet xhtml files.  Used for backward-compatibility with legacy Facelets implementation.</entry>
+                <entry>.xhtml</entry>
+              </row>
+              <row>
+                <entry>javax.faces.FACELETS_VIEW_MAPPINGS</entry>
+                <entry>2.0</entry>
+                <entry>Semicolon-separated list of Facelet files that don't use the default facelets suffix.</entry>
+                <entry>null</entry>
+              </row>
+              <row>
+                <entry>facelets.VIEW_MAPPINGS</entry>
+                <entry>2.0</entry>
+                <entry>Semicolon-separated list of Facelet files that don't use the default facelets suffix.  Used for backward-compatibility with legacy Facelets implementation.</entry>
+                <entry>null</entry>
+              </row>
+              <row>
+                <entry>javax.faces.FULL_STATE _SAVING_VIEW_IDS</entry>
+                <entry>2.0</entry>
+                <entry>Semicolon-separated list of view IDs that must save state using the JSF 1.2-style state saving.</entry>
+                <entry>null</entry>
+              </row>
+              <row>
+                <entry>javax.faces.INTERPRET_EMPTY _STRING_SUBMITTED_VALUES _AS_NULL</entry>
+                <entry>2.0</entry>
+                <entry>If true, consider empty UIInput values to be null instead of empty string.</entry>
+                <entry>false</entry>
+              </row>
+              <row>
+                <entry>javax.faces.PARTIAL_STATE_SAVING</entry>
+                <entry>2.0</entry>
+                <entry>If true, use the JSF2 partial state saving for views.</entry>
+                <entry>false, if WEB-INF/faces-config.xml does not declare JSF 2.0 schema.  true, otherwise</entry>
+              </row>
+              <row>
+                <entry>javax.faces.PROJECT_STAGE</entry>
+                <entry>2.0</entry>
+                <entry>Set the project stage to "Development", "UnitTest", "SystemTest", or "Production".</entry>
+                <entry>Production</entry>
+              </row>
+              <row>
+                <entry>javax.faces.VALIDATE_EMPTY_FIELDS</entry>
+                <entry>2.0</entry>
+                <entry>If "true", validate null and empty values.  If "auto" validate when JSR-303 Bean Validation is enabled (in AS6 it is enabled by default).</entry>
+                <entry>auto</entry>
+              </row>
+              <row>
+                <entry>javax.faces.validator.DISABLE _DEFAULT_BEAN_VALIDATOR</entry>
+                <entry>2.0</entry>
+                <entry>If "true", disable JSR-303 Bean Validation.</entry>
+                <entry>false</entry>
+              </row>
+            </tbody>
+          </tgroup>
+        </table>
+     </section>
+     <section id="mojarra.config.params">
+        <title>Mojarra Context Params</title>
+        <para>
+          These context params are only valid when using Mojarra JSF.
+        </para>
+        <table>
+          <tgroup cols="4">
+            <colspec colnum="1" colname="col1" colwidth="6*"/>
+            <colspec colnum="2" colname="col2" colwidth="1*"/>
+            <colspec colnum="3" colname="col3" colwidth="4*"/>
+            <colspec colnum="4" colname="col4" colwidth="3*"/>
+            <thead>
+              <row>
+                <entry>Context Param</entry>
+                <entry>Impl Ver</entry>
+                <entry>Description</entry>
+                <entry>Default Value</entry>
+              </row>
+            </thead>
+            <tbody>
+              <row>
+                <entry>com.sun.faces. numberOfViewsInSession</entry>
+                <entry>1.2 and 2.0</entry>
+                <entry>For server state-saving, how many views, per logical view, can be stored in the session before oldest is removed?</entry>
+                <entry>15</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces.numberOfLogicalViews</entry>
+                <entry>1.2 and 2.0</entry>
+                <entry>For server state-saving, how many logical views are allowed before oldest is removed?</entry>
+                <entry>15</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces.preferXHTML</entry>
+                <entry>1.2 and 2.0</entry>
+                <entry>Set xhtml as the content type for browsers that support it.</entry>
+                <entry>false</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces.compressViewState</entry>
+                <entry>1.2 and 2.0</entry>
+                <entry>Compress the view after serialization but before encoding.</entry>
+                <entry>false</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces.disableVersionTracking</entry>
+                <entry>1.2 and 2.0</entry>
+                <entry>If true, don't allow JSF 1.1 implementations of certain interfaces.</entry>
+                <entry>false</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces.sendPoweredByHeader</entry>
+                <entry>1.2 and 2.0</entry>
+                <entry>If true, send a header with the JSF spec level.</entry>
+                <entry>true</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces.verifyObjects</entry>
+                <entry>1.2 and 2.0</entry>
+                <entry>If true, verify all JSF artifacts (such as managed beans) can be instantiated during initialization.</entry>
+                <entry>false</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces.validateXml</entry>
+                <entry>1.2 and 2.0</entry>
+                <entry>If true, perform XML validation on config files.</entry>
+                <entry>false</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces.displayConfiguration</entry>
+                <entry>1.2 and 2.0</entry>
+                <entry>If true, log the values of all Mojarra and JSF context params.</entry>
+                <entry>false</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces.injectionProvider</entry>
+                <entry>1.2 and 2.0</entry>
+                <entry>Replace the default InjectionProvider implementation.  By default this is set by JBoss AS6.</entry>
+                <entry>org.jboss.web .jsf.integration .injection .JBossDelegatingInjectionProvider</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces.injectionProvider</entry>
+                <entry>1.2 and 2.0</entry>
+                <entry>Replace the default SerializationProvider implementation.</entry>
+                <entry>null</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces.responseBufferSize</entry>
+                <entry>1.2 and 2.0</entry>
+                <entry>Buffer size for writing most generated content.</entry>
+                <entry>4096</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces. clientStateWriteBufferSize</entry>
+                <entry>1.2 and 2.0</entry>
+                <entry>Buffer size for writing client state.</entry>
+                <entry>8192</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces.compressJavaScript</entry>
+                <entry>1.2 and 2.0</entry>
+                <entry>Remove whitespace from javascript used in standard JSF components.</entry>
+                <entry>true</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces.externalizeJavaScript</entry>
+                <entry>1.2 and 2.0</entry>
+                <entry>Allow browsers to cache javascript used in standard JSF components.</entry>
+                <entry>false</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces.enableJSStyleHiding</entry>
+                <entry>1.2 and 2.0</entry>
+                <entry>Hide javascript from older browser implementations.</entry>
+                <entry>false</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces.writeStateAtFormEnd</entry>
+                <entry>1.2 and 2.0</entry>
+                <entry>Controls if view state is written after opening a form tag (false) or closing a form tag (true).</entry>
+                <entry>true</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces. enableLazyBeanValidation</entry>
+                <entry>1.2 and 2.0</entry>
+                <entry>If false, examine managed beans at startup.  Otherwise, validate when referenced/created.</entry>
+                <entry>true</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces. enabledLoadBundle11Compatibility</entry>
+                <entry>1.2 and 2.0</entry>
+                <entry>Preserve JSF 1.1 behavior of f:loadBundle.
+                       <ulink url="https://javaserverfaces.dev.java.net/issues/show_bug.cgi?id=577">See issue here.</ulink></entry>
+                <entry>false</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces.clientStateTimeout</entry>
+                <entry>1.2 and 2.0</entry>
+                <entry>Time in seconds that client state is considered valid.  If a request is received after timeout expired, ViewExpiredException is thrown.</entry>
+                <entry>null</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces.serializeServerState</entry>
+                <entry>1.2 and 2.0</entry>
+                <entry>If true, serialize server-side component state.</entry>
+                <entry>false</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces. enableViewStateIdRendering</entry>
+                <entry>1.2 and 2.0</entry>
+                <entry>If false, don't render id attribute on javax.faces.ViewState hidden field.
+                       <ulink url="https://javaserverfaces.dev.java.net/issues/show_bug.cgi?id=433">See issue here.</ulink></entry>
+                <entry>true</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces. enableScriptsInAttributeValues</entry>
+                <entry>1.2 and 2.0</entry>
+                <entry>If false, don't allow attribute values with "javascirpt:" or "script:".</entry>
+                <entry>true</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces.disableUnicodeEscaping</entry>
+                <entry>1.2 and 2.0</entry>
+                <entry>"false", "true", or "auto". If "auto", escaping depends on response encoding.
+                <ulink url="https://javaserverfaces.dev.java.net/issues/show_bug.cgi?id=751">See issue here.</ulink></entry>
+                <entry>false</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces.developmentMode</entry>
+                <entry>1.2</entry>
+                <entry>If true, reload Groovy and faces-config files when edited.</entry>
+                <entry>false</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces. enableMultiThreadedStartup</entry>
+                <entry>1.2</entry>
+                <entry>If false, don't create worker threads at startup.</entry>
+                <entry>true</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces.enableThreading</entry>
+                <entry>2.0</entry>
+                <entry>If false, don't create worker threads at startup.</entry>
+                <entry>false</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces.resourceBufferSize</entry>
+                <entry>2.0</entry>
+                <entry>Read buffer size, in bytes, used by the default ResourceHandler implementation.</entry>
+                <entry>2048</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces.defaultResourceMaxAge</entry>
+                <entry>2.0</entry>
+                <entry>Time in milliseconds that a resource from the ResourceHandler will be cached via an "Expires" response header.  No caching if ProjectStage is "Development".</entry>
+                <entry>604800</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces. resourceUpdateCheckPeriod</entry>
+                <entry>2.0</entry>
+                <entry>Frequency in minutes to check for changes to webapp artifacts that contain resources.
+                       0 means never check for changes.
+                       -1 means always perform a new lookup when finding resources.</entry>
+                <entry>5</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces.compressableMimeTypes</entry>
+                <entry>2.0</entry>
+                <entry>Comma-seperated list of compressable mime types.  No compression if ProjectStage is "Development"</entry>
+                <entry>null</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces.expressionFactory</entry>
+                <entry>2.0</entry>
+                <entry>Expression factory implementation class.</entry>
+                <entry>com.sun.el .ExpressionFactoryImpl</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces.duplicateJARPattern</entry>
+                <entry>1.2 and 2.0</entry>
+                <entry>Regular expression to determine if two URLs point to the same jar.  Set by JBoss JSF Deployer.</entry>
+                <entry>^tmp\d+(\S*\.jar)</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces.faceletFactory</entry>
+                <entry>2.0</entry>
+                <entry>Set the FaceletFactory impl class.</entry>
+                <entry>null</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces.enableHtmlTagLibValidator</entry>
+                <entry>2.0</entry>
+                <entry>Enable validation of standard Html TagLibs.</entry>
+                <entry>false</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces.enableCoreTagLibValidator</entry>
+                <entry>2.0</entry>
+                <entry>Enable validation of standard Core TagLibs.</entry>
+                <entry>false</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces. registerConverterPropertyEditors</entry>
+                <entry>2.0</entry>
+                <entry>If true, allow EL Coercion to use JSF Custom converters.</entry>
+                <entry>false</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces.enableGroovyScripting</entry>
+                <entry>2.0</entry>
+                <entry>If true, allow Groovy.</entry>
+                <entry>false</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces. generateUniqueServerStateIds</entry>
+                <entry>2.0</entry>
+                <entry>If true, generate random server state Ids.  If false, create Ids sequentially.</entry>
+                <entry>true</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces. autoCompleteOffOnViewState</entry>
+                <entry>2.0</entry>
+                <entry>If false, don't use autocomplete="off" when saving view state.</entry>
+                <entry>true</entry>
+              </row>
+              <row>
+                <entry>com.sun.faces.allowTextChildren</entry>
+                <entry>2.0</entry>
+                <entry>If true, allow children of h:inputText and h:outputText to be rendered.
+                       In 1.2, they would always be rendered before the value of tag.
+                       In 2.0, they will not be rendered at all unless this flag is set.</entry>
+                <entry>false</entry>
+              </row>
+
+            </tbody>
+         </tgroup>
+       </table>
+     </section>
+
+     <section id="jboss.jsf.config.params">
+        <title>JBoss JSF Context Params</title>
+        <para>
+          These context params are explained more in Chapter 3.
+        </para>
+        <table>
+          <tgroup cols="3">
+            <colspec colnum="1" colname="col1" colwidth="8*"/>
+            <colspec colnum="2" colname="col2" colwidth="4*"/>
+            <colspec colnum="3" colname="col3" colwidth="2*"/>
+            <thead>
+              <row>
+                <entry>Context Param</entry>
+                <entry>Description</entry>
+                <entry>Default Value</entry>
+              </row>
+            </thead>
+            <tbody>
+              <row>
+                <entry>org.jboss.jbossfaces.JSF_CONFIG_NAME</entry>
+                <entry>The name of the JSF Configuration to use for this WAR.</entry>
+                <entry>Mojarra-2.0</entry>
+              </row>
+              <row>
+                <entry>org.jboss.jbossfaces.WAR_BUNDLES_JSF_IMPL</entry>
+                <entry>If true, allow WAR to use the JSF implementation found in WEB-INF/lib.</entry>
+                <entry>false</entry>
+              </row>
+            </tbody>
+          </tgroup>
+        </table>
+      </section>
+   </chapter>
+

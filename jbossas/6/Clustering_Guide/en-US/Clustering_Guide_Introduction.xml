@@ -1,0 +1,542 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.3//EN" "http://www.oasis-open.org/docbook/xml/4.3/docbookx.dtd">
+
+  <chapter id="clustering-intro.chapt">
+    <title>Introduction and Quick Start</title>
+    
+      <para>
+	      Clustering allows you to run an application on several parallel servers 
+	      (a.k.a cluster nodes) while providing a single view to application 
+	      clients. Load is distributed across different servers, and even if 
+	      one or more of the servers fails, the application is still accessible 
+	      via the surviving cluster nodes. Clustering is crucial for scalable 
+	      enterprise applications, as you can improve performance by adding more 
+	      nodes to the cluster. Clustering is crucial for highly available 
+	      enterprise applications, as it is the clustering infrastructure 
+	      that supports the redundancy needed for high availability.
+      </para>
+	
+      <para>
+	      The JBoss Application Server (AS) comes with clustering support out of 
+	      the box, as part of the <literal>all</literal> configuration. The
+	      <literal>all</literal> configuration includes support for the following:
+	      
+	      <itemizedlist>
+	      
+	      <listitem>
+	        <para>A scalable, fault-tolerant JNDI implementation (HA-JNDI).</para>
+	      </listitem>
+         
+         <listitem>
+           <para>Web tier clustering, including:</para>
+           <itemizedlist>
+             <listitem>
+               <para>High availability for web session state via state
+               replication.</para>
+             </listitem>
+           </itemizedlist>
+           <itemizedlist>
+             <listitem><para>Ability to integrate with hardware and software
+             load balancers, including special integration with mod_jk and
+             other JK-based software load balancers.</para></listitem>
+           </itemizedlist>
+           <itemizedlist>
+             <listitem><para>Single Sign-on support across a cluster.</para></listitem>
+           </itemizedlist>
+         </listitem>
+         
+         <listitem>
+           <para>EJB session bean clustering, for both stateful and stateless
+           beans, and for both EJB3 and EJB2.</para>
+         </listitem>
+         
+         <listitem>
+           <para>A distributed cache for JPA/Hibernate entities.</para>
+         </listitem>
+         
+         <listitem>
+           <para>A framework for keeping local EJB2 entity caches consistent
+           across a cluster by invalidating cache entries across the cluster
+           when a bean is changed on any node.</para>
+         </listitem>
+         
+         <listitem>
+           <para>Distributed JMS queues and topics via JBoss Messaging.</para>
+         </listitem>
+         
+         <listitem>
+           <para>Deploying a service or application on multiple nodes in the
+           cluster but having it active on only one (but at least one)
+           node, a.k.a. an "HA Singleton".</para>
+         </listitem>
+	      
+	      </itemizedlist>
+      </para>
+      
+      <para>
+        In this <emphasis>Clustering Guide</emphasis> we aim to provide you with
+        an in depth understanding of how to use JBoss AS's clustering features.
+        In this first part of the guide, the goal is to provide some basic "Quick Start"
+        steps to encourage you to start experimenting with JBoss AS Clustering, 
+        and then to provide some background information that will allow you to
+        understand how JBoss AS Clustering works. The next part of the
+        guide then explains in detail how to use these features to cluster
+        your JEE services. Finally, we provide some more details about advanced
+        configuration of JGroups and JBoss Cache, the core technologies that 
+        underlie JBoss AS Clustering.        
+      </para>
+
+      <section id="clustering-quickstart">
+         <title>Quick Start Guide</title>
+         <para>
+           The goal of this section is to give you the minimum information 
+           needed to let you get started experimenting with JBoss AS Clustering. 
+           Most of the areas touched on in this section are covered in much greater
+           detail later in this guide. 
+         </para>
+         
+         <section id="clustering-quickstart-setup">
+           <title>Initial Preparation</title>
+           
+           <para>Preparing a set of servers to act as a JBoss AS cluster
+           involves a few simple steps:</para>
+           
+           <itemizedlist>
+           <listitem>
+              <para><emphasis role="bold">Install JBoss AS on all your servers.</emphasis> 
+              In its simplest form, this is just a matter of unzipping the JBoss 
+              download onto the filesystem on each server. <!-- See the 
+              <emphasis>Administration and Configuration Guide</emphasis> for 
+              full details.--></para>
+              
+              <para id="clustering-prep-dualconfig">If you want to run multiple 
+              JBoss AS instances on a single server, you can either install the 
+              full JBoss distribution onto multiple locations on your filesystem, 
+              or you can simply make copies of the <literal>all</literal> 
+              configuration. For example, assuming the root of the JBoss distribution 
+              was unzipped to <literal>/var/jboss</literal>, you would:</para>
+              
+              <programlisting>
+$ cd /var/jboss/server
+$ cp -r all node1
+$ cp -r all node2</programlisting>
+           </listitem>
+           
+           <listitem>
+              <para><emphasis role="bold">For each node, determine the address 
+              to bind sockets to.</emphasis> When you start JBoss, whether
+              clustered or not, you need to tell JBoss on what address its 
+              sockets should listen for traffic. (The default is <literal>localhost</literal> 
+              which is secure but isn't very useful, particularly in a cluster.) 
+              So, you need to decide what those addresses will be.</para>
+           </listitem>
+           
+           <listitem>
+              <para><emphasis role="bold">Ensure multicast is working.</emphasis>
+              By default JBoss AS uses UDP multicast for most intra-cluster
+              communications.  Make sure each server's networking configuration
+              supports multicast and that multicast support is enabled for any
+              switches or routers between your servers. If you are planning to
+              run more than one node on a server, make sure the server's routing
+              table includes a multicast route. See the JGroups documentation
+              at <ulink url="http://www.jgroups.org">http://www.jgroups.org</ulink>
+              for more on this general area, including information on how to use 
+              JGroups' diagnostic tools to confirm that multicast is working. 
+              </para>
+              
+              <note>
+                <para>JBoss AS clustering does not require the use of UDP multicast; 
+                the AS can also be reconfigured to use TCP unicast for intra-cluster 
+                communication.</para>
+              </note>
+           </listitem>
+           
+           <listitem>
+              <para id="clustering-prep-serverpeerid"><emphasis role="bold">Determine a unique integer "ServerPeerID" for each
+              node.</emphasis>  This is needed for JBoss Messaging clustering,
+              and can be skipped if you will not be running JBoss Messaging 
+              (i.e. you will remove JBM from your server 
+              configuration's <literal>deploy</literal> directory).
+              JBM requires that each node in a cluster has a unique integer
+              id, known as a "ServerPeerID", that should remain consistent 
+              across server restarts. A simple 1, 2, 3, ..., x naming scheme is 
+              fine. We'll cover how to use these integer ids in the next section.</para>
+           </listitem>
+           </itemizedlist>
+           
+           <para>Beyond the above required steps, the following two optional steps are
+           recommended to help ensure that your cluster is properly isolated
+           from other JBoss AS clusters that may be running on your network:</para>
+           
+           <itemizedlist>
+           <listitem>
+             <para id="clustering-prep-clustername">
+             <emphasis role="bold">Pick a unique name for your cluster.</emphasis>
+             The default name for a JBoss AS cluster is "DefaultPartition". Come
+             up with a different name for each cluster in your environment, e.g.
+             "QAPartition" or "BobsDevPartition".  The use of "Partition" is not
+             required; it's just a semi-convention. As a small aid to performance
+             try to keep the name short, as it gets included in every message
+             sent around the cluster. We'll cover how to use the name you
+             pick in the next section.
+             </para>
+           </listitem>
+           
+           <listitem>
+             <para id="clustering-prep-mcastaddr">
+             <emphasis role="bold">Pick a unique multicast address for your cluster.</emphasis>
+             By default JBoss AS uses UDP multicast for most intra-cluster
+             communication. Pick a different multicast address for each cluster
+             you run. Generally a good multicast address is of the form
+             <literal>239.255.x.y</literal>. See 
+             <ulink url="http://www.29west.com/docs/THPM/multicast-address-assignment.html">
+             http://www.29west.com/docs/THPM/multicast-address-assignment.html
+             </ulink>
+             for a good discussion on multicast address assignment. We'll cover 
+             how to use the address you pick in the next section.
+             </para>
+           </listitem>
+           
+           </itemizedlist>
+           
+           <para>See <xref linkend="clustering-jgroups-isolation"/> for more on isolating clusters.</para>
+         </section>
+         
+         <section id="clustering-quickstart-launching">
+           <title>Launching a JBoss AS Cluster</title>
+           <para>The simplest way to start a JBoss server cluster is to start 
+           several JBoss instances on the same local network, using the 
+           <literal>-c all</literal> command line option for each instance. Those 
+           server instances will detect each other and automatically form a cluster.
+           </para>
+           
+           <para>Let's look at a few different scenarios for doing this. In each
+           scenario we'll be creating a two node cluster, where the 
+           <link linkend="clustering-prep-serverpeerid">ServerPeerID</link>
+           for the first node is <literal>1</literal> and for the second node is
+           <literal>2</literal>. We've decided to call our cluster "DocsPartition"
+           and to use <literal>239.255.100.100</literal> as our multicast address. 
+           These scenarios are meant to be illustrative; the use of a two node
+           cluster shouldn't be taken to mean that is the best size for a cluster;
+           it's just that's the simplest way to do the examples.</para>
+           
+           <itemizedlist>
+            <listitem><para><emphasis role="bold">Scenario 1: Nodes on Separate Machines</emphasis></para>
+            <para>This is the most common production scenario. Assume the
+            machines are named "node1" and "node2", while node1 has an IP address
+            of <literal>192.168.0.101</literal> and node2 has an address of 
+            <literal>192.168.0.102</literal>. Assume the "ServerPeerID" for
+            node1 is <literal>1</literal> and for node2 it's <literal>2</literal>.
+            Assume on each machine JBoss is installed in <literal>/var/jboss</literal>.</para>
+            
+            <para>On node1, to launch JBoss:</para>
+            <programlisting>
+$ cd /var/jboss/bin
+$ ./run.sh -c all -g DocsPartition -u 239.255.100.100 \
+    -b 192.168.0.101 -Djboss.messaging.ServerPeerID=1</programlisting>
+
+            <para>On node2, it's the same except for a different <literal>-b</literal>
+            value and ServerPeerID:</para>
+
+            <programlisting>
+$ cd /var/jboss/bin
+$ ./run.sh -c all -g DocsPartition -u 239.255.100.100 \
+    -b 192.168.0.102 -Djboss.messaging.ServerPeerID=2</programlisting>
+
+            <para>The <literal>-c</literal> switch says to use the <literal>all</literal> 
+            config, which includes clustering support. The <literal>-g</literal> switch
+            sets the cluster name. The <literal>-u</literal> switch sets the multicast
+            address that will be used for intra-cluster communication. The 
+            <literal>-b</literal> switch sets the address on which sockets 
+            will be bound. The <literal>-D</literal> switch sets system
+            property <literal>jboss.messaging.ServerPeerId</literal>, from which
+            JBoss Messaging gets its unique id.</para>
+            </listitem>
+            <listitem>
+            <para><emphasis role="bold">Scenario 2: Two Nodes on a Single, Multihomed, Server</emphasis></para>
+            <para>Running multiple nodes on the same machine is a common scenario 
+            in a development environment, and is also used in production in 
+            combination with Scenario 1. (Running <emphasis>all</emphasis> the 
+            nodes in a production cluster on a single machine is generally not 
+            recommended, since the machine itself becomes a single point of 
+            failure.) In this version of the scenario, the machine is multihomed, 
+            i.e. has more than one IP address. This allows the binding of each 
+            JBoss instance to a different address, preventing port conflicts 
+            when the nodes open sockets.
+            </para>
+            
+            <para>Assume the single machine has the <literal>192.168.0.101</literal> and 
+            <literal>192.168.0.102</literal> addresses assigned, and that the two
+            JBoss instances use the same addresses and ServerPeerIDs as in
+            Scenario 1. The difference from Scenario 1 is we need to be sure
+            each AS instance has its own work area. So, instead of using
+            the <literal>all</literal> config, we are going to use the
+            <literal>node1</literal> and <literal>node2</literal> configs we
+            copied from <literal>all</literal> in 
+            <link linkend="clustering-prep-dualconfig">the previous section</link>.</para>
+            
+            <para>To launch the first instance, open a console window and:</para>
+            <programlisting>
+$ cd /var/jboss/bin
+$ ./run.sh -c node1 -g DocsPartition -u 239.255.100.100 \
+    -b 192.168.0.101 -Djboss.messaging.ServerPeerID=1</programlisting>
+
+            <para>For the second instance, it's the same except for different 
+            <emphasis>-b</emphasis> and <emphasis>-c</emphasis> values and a 
+            different ServerPeerID:</para>
+
+            <programlisting>
+$ cd /var/jboss/bin
+$ ./run.sh -c node2 -g DocsPartition -u 239.255.100.100 \
+    -b 192.168.0.102 -Djboss.messaging.ServerPeerID=2</programlisting>
+            </listitem>
+            
+            <listitem>
+              <para><emphasis role="bold">Scenario 3: Two Nodes on a Single, Non-Multihomed, Server</emphasis></para>
+              <para>This is similar to Scenario 2, but here the machine
+              only has one IP address available. Two processes can't bind sockets 
+              to the same address and port, so we'll have to tell JBoss to use
+              different ports for the two instances. This can be done by
+              configuring the ServiceBindingManager service by setting the
+              <literal>jboss.service.binding.set</literal> system property.</para>
+            
+            <para>To launch the first instance, open a console window and:</para>
+            <programlisting>
+$ cd /var/jboss/bin
+$ ./run.sh -c node1 -g DocsPartition -u 239.255.100.100 \
+    -b 192.168.0.101 -Djboss.messaging.ServerPeerID=1 \
+    -Djboss.service.binding.set=ports-default</programlisting>
+
+            <para>For the second instance:</para>
+
+            <programlisting>
+$ cd /var/jboss/bin
+$ ./run.sh -c node2 -g DocsPartition -u 239.255.100.100 \
+    -b 192.168.0.101 -Djboss.messaging.ServerPeerID=2 \
+    -Djboss.service.binding.set=ports-01</programlisting>
+
+            <para>This tells the ServiceBindingManager on the first node to use
+            the standard set of ports (e.g. JNDI on 1099). The second node uses
+            the "ports-01" binding set, which by default for each port has an 
+            offset of 100 from the standard port number (e.g. JNDI on 1199).
+            See the <literal>conf/bootstrap/bindings.xml</literal> file for the
+            full ServiceBindingManager configuration.</para>
+            
+            <para>Note that this setup is not advised for production use,
+            due to the increased management complexity that comes with using 
+            different ports. But it is a fairly common scenario in development
+            environments where developers want to use clustering but cannot
+            multihome their workstations.</para>
+            
+            <note><para>Including <literal>-Djboss.service.binding.set=ports-default</literal>
+            on the command line for node1 isn't technically necessary, since
+            <literal>ports-default</literal> is the ... default. But using a
+            consistent set of command line arguments across all servers is
+            helpful to people less familiar with all the details.</para></note>
+            
+            </listitem>
+            
+           </itemizedlist>
+           
+           <para>That's it; that's all it takes to get a cluster of JBoss
+           AS servers up and running.</para>
+         </section>
+         
+         <section id="clustering-quickstart-http">
+           <title>Web Application Clustering Quick Start</title>
+           <para>JBoss AS supports clustered web sessions, where a backup
+             copy of each user's <literal>HttpSession</literal> state is stored
+             on one or more nodes in the cluster. In case the primary node
+             handling the session fails or is shut down, any other node in the
+             cluster can handle subsequent requests for the session by accessing
+             the backup copy.  Web tier clustering is discussed in detail in
+             <xref linkend="clustering-http"/>.</para>
+             
+           <para>There are two aspects to setting up web tier clustering:
+           
+             <itemizedlist>
+               <listitem><para><emphasis role="bold">Configuring an External 
+               Load Balancer</emphasis>. Web applications require an external
+               load balancer to balance HTTP requests across the cluster of JBoss AS
+               instances (see <xref linkend="clustering-concepts-arch-balancer"/> 
+               for more on why that is). JBoss AS itself doesn't act as an HTTP load
+               balancer. So, you will need to set up a hardware or software
+               load balancer. There are many possible load balancer choices,
+               so how to configure one is really beyond the scope of a Quick Start.
+               But see <xref linkend="clustering-http-modjk"/> for details on 
+               how to set up the popular mod_jk software load balancer.</para>
+               </listitem>
+               <listitem><para><emphasis role="bold">Configuring Your Web
+               Application for Clustering</emphasis>. This aspect involves
+               telling JBoss you want clustering behavior for a particular
+               web app, and it couldn't be simpler. Just add an empty 
+               <literal>distributable</literal> element to your application's
+               <literal>web.xml</literal> file:</para>
+        <programlisting>&lt;?xml version="1.0"?&gt; 
+&lt;web-app  xmlns="http://java.sun.com/xml/ns/javaee"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+          xsi:schemaLocation="http://java.sun.com/xml/ns/javaee 
+                              http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd" 
+          version="2.5"&gt;
+          
+    &lt;distributable/&gt;
+    
+&lt;/web-app&gt;</programlisting>
+               
+               <para>Simply doing that is enough to get the default JBoss AS
+               web session clustering behavior, which is appropriate for most
+               applications. See <xref linkend="clustering-http-state"/> for
+               more advanced configuration options.</para>
+               </listitem>
+             </itemizedlist>
+           </para>
+         </section>
+         
+         <section id="clustering-quickstart-ejbsessions">
+           <title>EJB Session Bean Clustering Quick Start</title>
+           <para>JBoss AS supports clustered EJB session beans, whereby
+           requests for a bean are balanced across the cluster. For
+           stateful beans a backup copy of bean state is maintained on one
+           or more cluster nodes, providing high availability in case the
+           node handling a particular session fails or is shut down. Clustering
+           of both EJB2 and EJB3 beans is supported.
+           </para>
+           
+           <para>For EJB3 session beans, simply add the <literal>org.jboss.ejb3.annotation.Clustered</literal>
+           annotation to the bean class for your stateful or stateless bean:</para>
+           
+        <programlisting>
+@javax.ejb.Stateless
+@org.jboss.ejb3.annotation.Clustered
+public class MyBean implements MySessionInt {
+   
+   public void test() {
+      // Do something cool
+   }
+}</programlisting>
+           
+           <para>For EJB2 session beans, or for EJB3 beans where you prefer
+           XML configuration over annotations, simply add a <literal>clustered</literal>
+           element to the bean's section in the JBoss-specific deployment
+           descriptor, <literal>jboss.xml</literal>:</para>
+                   
+           <programlisting>
+&lt;jboss&gt;    
+    &lt;enterprise-beans&gt;      
+        &lt;session&gt;        
+            &lt;ejb-name&gt;example.StatelessSession&lt;/ejb-name&gt;        
+            &lt;jndi-name&gt;example.StatelessSession&lt;/jndi-name&gt;        
+            &lt;clustered&gt;true&lt;/clustered&gt;
+        &lt;/session&gt;
+    &lt;/enterprise-beans&gt;
+&lt;/jboss&gt; </programlisting>
+           
+           <para>See <xref linkend="clustering-session"/> for more advanced 
+           configuration options.</para>
+         </section>
+         
+         <section id="clustering-quickstart-ejb3entities">
+           <title>Entity Clustering Quick Start</title>
+           <para>One of the big improvements in the clustering area in JBoss AS 5 
+           is the use of the new Hibernate/JBoss Cache integration for second level
+           entity caching that was introduced in Hibernate 3.3. In the JPA/Hibernate 
+           context, a second level cache refers to a cache whose contents are 
+           retained beyond the scope of a transaction. A second level cache
+           <emphasis>may</emphasis> improve performance by reducing the number
+           of database reads. You should always load test your application
+           with second level caching enabled and disabled to see whether
+           it has a beneficial impact on your particular application.</para>
+           
+           <para>If you use more than one JBoss AS instance to run your 
+           JPA/Hibernate application and you use second level caching, you must 
+           use a cluster-aware cache. Otherwise a cache on server A will still 
+           hold out-of-date data after activity on server B updates some entities.</para>
+           <para>JBoss AS provides a cluster-aware second level cache based on JBoss Cache.
+           To tell JBoss AS's standard Hibernate-based JPA provider to enable 
+           second level caching with JBoss Cache, configure your 
+           <literal>persistence.xml</literal> as follows:</para>
+           
+           <programlisting><![CDATA[
+<?xml version="1.0" encoding="UTF-8"?>
+<persistence xmlns="http://java.sun.com/xml/ns/persistence"
+   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+   xsi:schemaLocation="http://java.sun.com/xml/ns/persistence
+   http://java.sun.com/xml/ns/persistence/persistence_1_0.xsd"
+   version="1.0"> 
+   <persistence-unit name="somename" transaction-type="JTA">
+      <jta-data-source>java:/SomeDS</jta-data-source>
+      <properties>
+         <property name="hibernate.cache.use_second_level_cache" value="true"/>
+         <property name="hibernate.cache.region.factory_class" 
+                   value="org.hibernate.cache.jbc2.JndiMultiplexedJBossCacheRegionFactory"/>
+         <property name="hibernate.cache.region.jbc2.cachefactory" value="java:CacheManager"/>
+         <!-- Other configuration options ... -->
+      </properties>
+   </persistence-unit>
+</persistence>]]>
+           </programlisting>
+           
+           <para>That tells Hibernate to use the JBoss Cache-based second level
+           cache, but it doesn't tell it what entities to cache. That can
+           be done by adding the <literal>org.hibernate.annotations.Cache</literal>
+           annotation to your entity class:</para>
+           
+           <programlisting><![CDATA[
+package org.example.entities;
+ 
+import java.io.Serializable;
+import javax.persistence.Entity;
+import org.hibernate.annotations.Cache;
+import org.hibernate.annotations.CacheConcurrencyStrategy;
+ 
+@Entity
+@Cache (usage=CacheConcurrencyStrategy.TRANSACTIONAL)
+public class Account implements Serializable]]>
+           </programlisting>
+           
+           <para>See <xref linkend="clustering-entity"/> for more advanced 
+           configuration options and details on how to configure the same
+           thing for a non-JPA Hibernate application.</para>
+           
+           <note><para>Clustering can add significant overhead to a JPA/Hibernate 
+           second level cache, so don't assume that just because second level 
+           caching adds a benefit to a non-clustered application that it will be 
+           beneficial to a clustered application. Even if clustered second level 
+           caching is beneficial overall, caching of more frequently modified
+           entity types may be beneficial in a non-clustered scenario but not in
+           a clustered one.  <emphasis>Always</emphasis> load test your application.
+           </para></note>
+         </section>
+         
+      </section>
+      
+      
+           
+      <!-- 
+      <section id="clustering-intro-state">
+        <title>Distributed state replication services</title>
+        <para>In a clustered server environment, distributed state management is a key service the cluster must
+                    provide. For instance, in a stateful session bean application, the session state must be
+                    synchronized among all bean instances across all nodes, so that the client application reaches the
+                    same session state no matter which node serves the request. In an entity bean application, the bean
+		    object sometimes needs to be cached across the cluster to reduce the database load. Currently, the state replication and distributed cache services in JBoss AS are provided via three ways: the <literal>HASessionState</literal> Mbean, the <literal>DistributedState</literal> MBean and the JBoss Cache framework.</para>
+        <itemizedlist>
+          <listitem>
+		  <para>The <literal>HASessionState</literal> MBean is a legacy service that provides session replication and distributed cache services for EJB 2.x stateful session beans. The MBean is defined in the  <literal>all/deploy/cluster-service.xml</literal> file. We will show its configuration options in the EJB 2.x stateful session bean section later.</para>
+          </listitem>
+	  <listitem>
+		  <para>
+			  The <literal>DistributedState</literal> Mbean is a legacy service built on the HAPartition service. It is supported for backwards compatibility reasons, but new applications should not use it; they should use the much more sophisticated JBoss Cache instead.
+		  </para>
+	  </listitem>
+	  
+          <listitem>
+            <para>
+		    As mentioned above JBoss Cache  is used to provide cache services for HTTP sessions, EJB 3.0 session beans and EJB 3.0 entity beans. It is the primary distributed state management tool in JBoss AS, and is an excellent choice for any custom caching requirements your applications may have.  We will cover JBoss Cache in more detail when we discuss specific services in the next several sections..</para>
+          </listitem>
+        </itemizedlist>
+
+      </section>
+      -->
+      </chapter>
+

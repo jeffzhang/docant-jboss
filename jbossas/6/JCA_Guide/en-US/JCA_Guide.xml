@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE book PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd">
+<book>
+  
+<xi:include href="Book_Info.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+
+ 
+<part id="Introduction">
+   <title>Introduction</title>
+   <xi:include href="JCA_Guide_Introduction.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+</part>
+
+<part id="JCA_Config">
+   <title>Configuration</title>
+   <xi:include href="JCA_Alternative_DBs.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+   <xi:include href="JCA_Pooling.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+</part>
+
+<part id="JCA_Reference">
+  <title>Reference</title>
+  <xi:include href="JCA_Guide_Reference.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+</part>
+
+</book>

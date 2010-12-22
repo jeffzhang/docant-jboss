@@ -1,0 +1,240 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.3//EN" "http://www.oasis-open.org/docbook/xml/4.3/docbookx.dtd">
+
+  <chapter id="jsf.deployer.config">
+    <title>Deploying Your JSF Applications</title>
+    
+    <para>
+     In this chapter, we cover all the deployment options for your JSF applications.
+    </para>
+
+      <section id="jsf.deployer">
+        <title>The JSF Deployer</title>
+        <para>
+          JSF integration for JBoss AS6 has been re-written to take
+          advantage of the JBoss deployer architecture.  So instead of having
+          JSF tightly coupled to the Servlet container, it is now an independent deployer
+          that adds JSF to your WAR when needed.
+        </para>
+	<para>
+          The JSF Deployer is located in the <filename>deployers/jsf.deployer</filename>
+          directory.  By default, JBoss AS6 ships with three JSF implementations located
+          in the <filename>jsf.deployer/Mojarra-2.0</filename>,
+          <filename>jsf.deployer/MyFaces-2.0</filename>, and
+          <filename>jsf.deployer/Mojarra-1.2</filename> directories.  These
+          directories contain <firstterm>JSF Configurations</firstterm>.
+        </para>
+        <note>
+          A JSF Configuration is more than just the implementation jars.  It can 
+          contain supporting jars such as parsers and JSF component libraries.  It also
+          contains initialization and configuration settings that are applied to your
+          application when the JSF Configuration is added to your WAR deployment.
+        </note>
+        <para>
+          Inside the <filename>jsf.deployer/META-INF</filename> directory you will
+          find a file called <filename>jsf-integration-deployer-jboss-beans.xml</filename>.
+          You can use this file for advanced configuration of the deployer, which we
+          will describe in some of the sections that follow.
+        </para>
+     </section>
+     <section id="how.deployer.decides">
+       <title>How the JSF Deployer Recognizes your JSF Application</title>
+       <para>
+         In past versions of JBoss AS, <emphasis>every</emphasis> web
+         application had a JSF implementation
+         and its supporting jars placed on its classpath.  In addition, every
+         web application went through at least some of the JSF initialization
+         process - even when it didn't use JSF.  With JBoss AS6, JSF jars are
+         only added to the classpath when needed.
+       </para>
+       <para>
+         When a web application is deployed, the JSF Deployer determines if it
+         is a JSF application.  It recognizes a web application if any of the
+         following are true:
+       </para>
+       <itemizedlist>
+         <listitem>A FacesServlet is declared in <filename>WEB-INF/web.xml</filename> or a <filename>web-fragment.xml</filename></listitem>
+         <listitem>A <filename>faces-config.xml</filename> file is found in <filename>WEB-INF</filename></listitem>
+         <listitem>A <filename>faces-config.xml</filename> file is found in <filename>META-INF</filename> of some jar in <filename>WEB-INF/lib</filename></listitem>
+         <listitem>A <filename>*.faces-config.xml</filename> file is found in <filename>META-INF</filename> of some jar in <filename>WEB-INF/lib</filename></listitem>
+         <listitem>The <filename>javax.faces.CONFIG_FILES</filename> context param is declared in <filename>WEB-INF/web.xml</filename> or  a <filename>web-fragment.xml</filename></listitem>
+         <listitem>The <filename>org.jboss.jbossfaces.JSF_CONFIG_NAME</filename> context param is declared in <filename>WEB-INF/web.xml</filename> or a <filename>web-fragment.xml</filename></listitem>
+         <listitem>"alwaysAddJSF" is set to true in <filename>jsf-integration-deployer-jboss-beans.xml</filename></listitem>
+       </itemizedlist>
+       
+       
+     </section>
+
+     <section id="auto.adding.jsf.declarations">
+       <title>Auto-adding of the JSF FacesServlet</title>
+       <para>
+         If the JSF Deployer determines that a WAR is a JSF application, but
+         <classname>javax.faces.webapp.FacesServlet</classname> is not already declared
+         as a servlet, the deployer will add an instance of this servlet for you.
+       </para>
+       <para>
+         If it adds the FacesServlet, it will also add the following mappings for it:
+         <itemizedlist>
+           <listitem>/faces/*</listitem>
+           <listitem>*.jsf</listitem>
+           <listitem>*.faces</listitem>
+         </itemizedlist>
+       </para>
+     </section>
+
+     <section id="non.standard.facesservlet">
+       <title>Using a Non-standard FacesServlet</title>
+       <para>
+         Though it is not recommended, some applications use a non-standard
+         servlet to control JSF services.  You can configure the JSF Deployer
+         to recognize a non-standard servlet as a JSF application.
+         Edit the file <filename>jsf.deployer/META-INF/jsf-integration-deployer-jboss-beans.xml</filename>
+         and add your servlet to the facesServlets property.
+       </para>
+       <para>
+         In this example, we add <classname>org.foo.MyWrapperFacesServlet</classname>.
+         When an application is deployed with this servlet it will be recognized as a
+         JSF application.
+       <programlisting><![CDATA[<bean name="JSFImplManagementDeployer">
+
+
+    <!--
+      * Specify the servlet classes that signal this deployer to add JSF to a WAR.
+    -->
+    <property name="facesServlets">
+       <collection elementClass="java.lang.String">
+          <value>javax.faces.webapp.FacesServlet</value>
+          <value>org.foo.MyWrapperFacesServlet</value>
+       </collection>
+    </property>]]>
+       </programlisting>
+       </para>
+       
+     </section>
+
+     <section id="bundling.jsf.with.war">
+       <title>Bundling JSF Inside Your WAR</title>
+       <para>
+         Some containers such as Tomcat 6 require you to bundle a JSF implementation
+         in the <filename>WEB-INF/lib</filename> directory of your WAR.  If you
+         would like to use such a WAR with JBoss AS6 then you can signal the
+         JSF Deployer to ignore your WAR and let it use the bundled JSF version.
+       </para>
+       <para>
+         To do that, just specify the WAR_BUNDLES_JSF context param in your
+         web.xml file like this:
+       <programlisting><![CDATA[<context-param>
+      <param-name>org.jboss.jbossfaces.WAR_BUNDLES_JSF_IMPL</param-name>
+      <param-value>true</param-value>
+</context-param>]]>
+       </programlisting>
+       </para>
+       <note>
+         This context-param was available in earlier versions of JBoss AS.
+         However, it only worked when bundling MyFaces and when using the default
+         classloader configuration.  Now in AS6 you can use this context-param
+         any time you want to bundle your own JSF impl.
+       </note>
+     </section>
+     <section id="changing.jsf.config">
+       <title>Changing the JSF Configuration for your WAR</title>
+       <para>
+         JBoss AS ships with three JSF Implementations, Mojarra 1.2, Mojarra 2.0,
+         and MyFaces 2.0.
+         By default, JSF applications will use Mojarra 2.0.  While most JSF 1.2 
+         applications will run on JSF 2.0 without changes, there are a few rare 
+         instances where this is not the case.  Also, when migrating to 
+         JBoss AS6 from AS5, you might want to first use the older JSF 
+         implementation and "ease into" the world of JSF 2.0 later.
+       </para>
+       <para>
+         If you look at the <filename>deployers/jsf.deployer</filename> directory 
+         you will see the JSF configurations that ship with JBoss AS6.  To 
+         tell your application to use one of these JSF configurations, add this to
+         your <filename>web.xml</filename>:
+       <programlisting><![CDATA[<context-param>
+      <param-name>org.jboss.jbossfaces.JSF_CONFIG_NAME</param-name>
+      <param-value>Mojarra-1.2</param-value>
+ </context-param>]]>
+       </programlisting>
+       </para>
+     </section>
+     <section id="adding.jsf.config">
+       <title>Adding a New JSF Configuration</title>
+       <para>
+         A new JSF Configuration is useful when you want to add a new JSF
+         implementation to JBoss AS or you just want to enhance an implementation
+         with extra jars such as component libraries.  This can save you from
+         bundling the same jars over and over in your WARs.
+       </para>
+       <para>
+         It's also useful for testing the same application against different JSF
+         implementations, library versions, and configurations.  You can create
+         a JSF Configuration and then apply it to your WAR with a a simple
+         context param.
+       </para>
+       <para>
+         A JSF Configuration consists of some jars and a special <filename>web.xml</filename>
+         file.  When a JSF Configuration is added to a WAR by the JSF Deployer,
+         the jars are added to the classpath and the elements in the
+         <filename>web.xml</filename> file are activated.  To add your own
+         JSF Confguration, just create the directory structure below.
+         This is usually done in the jsf.deployer directory:
+         <itemizedlist>
+           <listitem><filename>jsf.deployer/MyJSFConfig/jsf-libs</filename></listitem>
+           <listitem><filename>jsf.deployer/MyJSFConfig/META-INF</filename></listitem>
+         </itemizedlist>
+       </para>
+       <para>
+         Place your jar files in <filename>/jsf-libs</filename> and place your
+         <filename>web.xml</filename> in <filename>/META-INF</filename>.
+         When your JSF Configuration is activated for a WAR, all jars in the
+         jsf-libs directory will be added to the classpath.
+       </para>
+       <para>
+         The elements in your special <filename>META-INF/web.xml</filename> file will
+         also be added to your WAR.  This can help you configure the JSF
+         implementation and component libraries.  However, note that only a
+         few web.xml elements are allowed in this file.  These elements are
+         <emphasis>servlet, servlet-mapping, filter, filter-mapping, listener,
+         and context-param</emphasis>.  All other web.xml elements are
+         currently ignored, but we may support more in the future.
+       </para>
+     </section>
+     <section id="activating.jsf.config">
+       <title>Activating a New JSF Configuration</title>
+       <para>
+         To allow the JSF Deployer to recognize your JSF Configuration, you
+         will need to edit
+         <filename>deployers/jsf.deployer/META-INF/jsf-integration-deployer-jboss-beans.xml</filename>:
+         <programlisting><![CDATA[<property name="jsfConfigurations">
+  <map keyClass="java.lang.String" valueClass="java.lang.String">
+    <entry>
+      <key>Mojarra-1.2</key>
+      <value>${jboss.server.home.url}deployers/jsf.deployer/Mojarra-1.2</value>
+    </entry>
+    <entry>
+      <key>Mojarra-2.0</key>
+      <value>${jboss.server.home.url}deployers/jsf.deployer/Mojarra-2.0</value>
+    </entry>
+
+    <entry>
+       <key>MyJSFConfig</key>
+        <value>${jboss.server.home.url}deployers/jsf.deployer/MyJSFConfig</value>
+     </entry>
+  </map>
+</property>]]>
+       </programlisting>
+       <programlisting><![CDATA[<bean name="JSFUrlIntegrationDeployer-MyJSFConfig">
+    <property name="JSFImplName">
+      <value>MyJSFConfig</value>
+    </property>
+    <property name="JSFImplManagementDeployer">
+      <inject bean="JSFImplManagementDeployer"/>
+    </property>
+</bean>]]>
+       </programlisting>
+       </para>
+
+     </section>
+   </chapter>

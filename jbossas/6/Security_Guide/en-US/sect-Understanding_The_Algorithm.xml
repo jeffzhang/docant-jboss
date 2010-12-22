@@ -1,0 +1,75 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!DOCTYPE section PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd">
+<section id="sect-Understanding_The_Algorithm">
+  <title>Understanding the Algorithm</title>
+  <para>The appeal of the SRP algorithm is that is allows for mutual authentication of client and server using simple text passwords without a secure communication channel. </para>
+  <note>
+    <para>Additional information on the SRP algorithm and its history can be found at <ulink url="http://srp.stanford.edu/"/>.
+  </para>
+  </note>
+<!--TODO: Perhaps make this epic  orderedlist a procedure and summarize each step.  -->  <para>There are six steps that are performed to complete authentication:
+   </para>
+  <orderedlist>
+    <listitem>
+      <para>
+      The client side <literal>SRPLoginModule</literal> retrieves from the naming service the SRPServerInterface instance for the remote authentication server.
+     </para>
+    </listitem>
+    <listitem>
+      <para>
+      The client side <literal>SRPLoginModule</literal> next requests the SRP parameters associated with the username attempting the login. There are a number of parameters involved in the SRP algorithm that must be chosen when the user password is first transformed into the verifier form used by the SRP algorithm. Rather than hard-coding the parameters (which could be done with minimal security risk), the JBossSX implementation allows a user to retrieve this information as part of the exchange protocol. The <literal>getSRPParameters(username)</literal> call retrieves the SRP parameters for the given username.
+     </para>
+    </listitem>
+    <listitem>
+      <para>
+      The client side <literal>SRPLoginModule</literal> begins an SRP session by creating an <literal>SRPClientSession</literal> object using the login username, clear-text password, and SRP parameters obtained from step 2. The client then creates a random number A that will be used to build the private SRP session key. The client then initializes the server side of the SRP session by invoking the <literal>SRPServerInterface.init</literal> method and passes in the username and client generated random number <literal>A</literal>. The server returns its own random number <literal>B</literal>. This step corresponds to the exchange of public keys.
+     </para>
+    </listitem>
+    <listitem>
+      <para>
+      The client side <literal>SRPLoginModule</literal> obtains the private SRP session key that has been generated as a result of the previous messages exchanges. This is saved as a private credential in the login <literal>Subject</literal>. The server challenge response <literal>M2</literal> from step 4 is verified by invoking the <literal>SRPClientSession.verify</literal> method. If this succeeds, mutual authentication of the client to server, and server to client have been completed. The client side <literal>SRPLoginModule</literal> next creates a challenge <literal>M1</literal> to the server by invoking <literal>SRPClientSession.response</literal> method passing the server random number <literal>B</literal> as an argument. This challenge is sent to the server via the <literal>SRPServerInterface.verify</literal> method and server&apos;s response is saved as <literal>M2</literal>. This step corresponds to an exchange of challenges. At this point the server has verified that the user is who they say they are.
+     </para>
+    </listitem>
+    <listitem>
+      <para>
+      The client side <literal>SRPLoginModule</literal> saves the login username and <literal>M1</literal> challenge into the <literal>LoginModule</literal> sharedState map. This is used as the Principal name and credentials by the standard JBoss <literal>ClientLoginModule</literal>. The <literal>M1</literal> challenge is used in place of the password as proof of identity on any method invocations on Java EE components. The <literal>M1</literal> challenge is a cryptographically strong hash associated with the SRP session. Its interception via a third partly cannot be used to obtain the user&apos;s password.
+     </para>
+    </listitem>
+    <listitem>
+      <para>
+      At the end of this authentication protocol, the SRPServerSession has been placed into the SRPService authentication cache for subsequent use by the <literal>SRPCacheLoginModule</literal>.
+     </para>
+    </listitem>
+  </orderedlist>
+  <para>Although SRP has many interesting properties, it is still an evolving component in the JBossSX framework and has some limitations of which you should be aware. Issues of note include the following:
+   </para>
+  <itemizedlist>
+    <listitem>
+      <para>Where authentication is performed, the way in which  JBoss detaches the method transport protocol from the component container   could allow a user to snoop the SRP <literal>M1</literal> challenge and effectively use the challenge to make requests as the associated username. Custom interceptors can be used to prevent the issue, by encrypting  the challenge using the SRP session key.
+     </para>
+    </listitem>
+    <listitem>
+      <para>
+      The SRPService maintains a cache of SRP sessions that time out after a configurable period. Once they time out, any subsequent Java EE component access will fail because there is currently no mechanism for transparently renegotiating the SRP authentication credentials. You must either set the authentication cache timeout quite high, or handle re-authentication in your code on failure. </para>
+      <note>
+        <para>The SRPService supports timeout durations up to 2,147,483,647 seconds, or approximately 68 years.</para>
+      </note>
+    </listitem>
+    <listitem>
+      <para>There can only be one SRP session for a given username by default. The session is classed as  stateful, because the negotiated SRP session produces a private session key that can be used for encryption and decryption between the client and server.  JBoss supports multiple SRP sessions per user, however it is not possible to  encrypt data with one session key, and decrypt it with another.
+     </para>
+    </listitem>
+  </itemizedlist>
+  <para>
+    To use end-to-end SRP authentication for Java EE component calls, you must configure the security domain under which the components are secured to use the <classname>org.jboss.security.srp.jaas.SRPCacheLoginModule</classname>. The <literal>SRPCacheLoginModule</literal> has a single configuration option named <literal>cacheJndiName</literal> that sets the JNDI location of the SRP authentication <literal>CachePolicy</literal> instance. This must correspond to the <literal>AuthenticationCacheJndiName</literal> attribute value of the <literal>SRPService</literal> MBean. </para>
+  <para>The <literal>SRPCacheLoginModule</literal> authenticates user credentials by obtaining the client challenge from the <literal>SRPServerSession</literal> object in the authentication cache and comparing this to the challenge passed as the user credentials. <xref linkend="fig-SRPCacheLoginModule_with_SRP_Session_Cache"/> illustrates the operation of the SRPCacheLoginModule.login method implementation.
+   </para>
+  <figure id="fig-SRPCacheLoginModule_with_SRP_Session_Cache">
+    <title>SRPCacheLoginModule with SRP Session Cache</title>
+    <mediaobject>
+      <imageobject>
+        <imagedata align="center" fileref="images/j2ee_chap8-14.jpg"/>
+      </imageobject>
+    </mediaobject>
+  </figure>
+</section>

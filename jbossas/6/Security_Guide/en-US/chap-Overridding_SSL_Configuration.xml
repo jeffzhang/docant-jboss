@@ -1,0 +1,105 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd">
+<chapter id="chap-Overridding_SSL_Configuration">
+   <title>Overriding SSL Configuration</title>
+   <para>
+      Many services in JBoss allow usage of SSL for secure communication. To configure SSL, these services require a <emphasis>KeyStore</emphasis> for the certificate and private key and possibly a                <emphasis>TrustStore</emphasis> with the trusted client certificates. Those attributes can be configured using the JDK system properties (<methodname>javax.net.ssl.keyStore</methodname>,                     <methodname>javax.net.ssl.keyStorePassword</methodname>, <methodname>javax.net.ssl.trustStore</methodname>, <methodname>javax.net.ssl.trustStorePassword</methodname>) or by a service specific set of         attributes.
+   </para>
+
+   <para>
+      There can be situations when the AS as a whole should be using just one keystore and truststore for all the services, essentially ignoring all the system properties and service's specific                    configurations.
+   </para>
+
+   <para>
+      Starting in JBoss AS 6 there is a new service that can be installed at bootstrap that can override all the configuration for the <emphasis>KeyStore</emphasis> and <emphasis>TrustStore</emphasis>,            provided that the service uses the default algorithm for the <classname>KeyManagerFactory</classname> (<methodname>SunX509</methodname> for Sun, JRockit and OpenJDK and <methodname>IbmX509</methodname>      for IBM) and <classname>TrustManagerFactory</classname> (<methodname>PKIX</methodname> for Sun, JRockit, OpenJDK and IBM).
+   </para>
+
+   <para>
+      Here is an example configuration for the service in <filename>conf/bootstrap/security.xml</filename>:
+   </para>
+
+   <programlisting>&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;!--
+    Security bootstrap configuration
+--&gt;
+&lt;deployment xmlns=&quot;urn:jboss:bean-deployer:2.0&quot;&gt;
+
+  ...
+
+   &lt;bean name=&quot;JBossSSLConfiguration&quot; class=&quot;org.jboss.security.ssl.JBossSSLConfiguration&quot;&gt;
+      &lt;property name=&quot;keyStoreURL&quot;&gt;my.keystore&lt;/property&gt;
+      &lt;property name=&quot;keyStorePassword&quot;&gt;changeit&lt;/property&gt;
+   &lt;/bean&gt;
+&lt;/deployment&gt;
+   </programlisting>
+
+   <para>
+      With this service in place, the <methodname>keystoreFile</methodname> and <methodname>keystorePass</methodname> attributes of a HTTPS connector in <filename>deploy/jbossweb.sar/server.xml</filename>         would be overridden for example.
+   </para>
+
+   <para>
+      These are the properties the JBossSSLConfiguration bean accepts:
+   </para>
+
+   <itemizedlist>
+      <listitem>
+         <para>
+            <methodname>keyStoreURL</methodname>
+         </para>
+      </listitem>
+      <listitem>
+         <para>
+            <methodname>keyStorePassword</methodname>
+         </para>
+      </listitem>
+      <listitem>
+         <para>
+            <methodname>keyStoreAlias</methodname>
+         </para>
+      </listitem>
+      <listitem>
+         <para>
+            <methodname>keyStoreProvider</methodname>
+         </para>
+      </listitem>
+      <listitem>
+         <para>
+            <methodname>keyStoreProviderArgument</methodname>
+         </para>
+      </listitem>
+      <listitem>
+         <para>
+            <methodname>trustStoreURL</methodname>
+         </para>
+      </listitem>
+      <listitem>
+         <para>
+            <methodname>trustStorePassword</methodname>
+         </para>
+      </listitem>
+      <listitem>
+         <para>
+            <methodname>trustStoreProvider</methodname>
+         </para>
+      </listitem>
+      <listitem>
+         <para>
+            <methodname>trustStoreProviderArgument</methodname>
+         </para>
+      </listitem>
+   </itemizedlist>
+
+   <para>
+      These properties are the same as the ones in the <classname>JaasSecurityDomain</classname> bean. See <xref linkend="The_JBoss_Security_Extension_Architecture-The_JaasSecurityDomain_Bean"/> for a             detailed description.
+   </para>
+
+   <para>
+      The <methodname>keyStorePassword</methodname> can be masked using the same methods described for the <methodname>keyStorePass</methodname>.
+   </para>
+
+   <note>
+      <para>
+         There is still no support for using the Password annotation (shown in <xref linkend="Masking_Passwords"/>) to mask those passwords as the <classname>PasswordMaskManagement</classname> bean is                started much later in the boot process.
+      </para>
+   </note>
+</chapter>

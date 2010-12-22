@@ -1,0 +1,380 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd">
+<chapter id="chap-Secure_Socket_Layer">
+  <title>
+    Encrypting EJB connections with SSL
+  </title>
+
+<!-- Information for this chapter was gleaned from:
+http://community.jboss.org/wiki/SSLEJB21
+https://jira.jboss.org/browse/JBPAPP-442
+http://docs.jboss.org/jbossremoting/docs/guide/2.5/html/chapter-configuration.html#d0e4876
+
+Anil Saldhana, JBoss Security SME, contributed content
+Carlo de Wolf, JBoss EJB3 SME, gave input
+Bela Ban, JBoss Remoting SME, would also be an appropriate contact for some questions
+-->
+
+  <para>
+    JBoss Application Server uses a socket-based invoker layer for Remote Method Invocation (RMI) of EJB2 and EJB3 Beans. This network traffic is not encrypted by default. Follow the instructions in this chapter to use Secure Sockets Layer (SSL) to encrypt this network traffic.
+  </para>
+
+  <procedure>
+    <title>Configure SSL for EJB3 Overview</title>
+    <step>
+      <para>Generate encryption keys and certificate</para>
+    </step>
+    <step>
+      <para>Configure a secure remote connector</para>
+    </step>
+    <step>
+      <para>
+        Annotate EJB3 beans that will use the secure connector
+      </para>
+    </step>
+    </procedure>
+
+  <procedure>
+    <title>Configure SSL for EJB2 Overview</title>
+    <step>
+      <para>Generate encryption keys and certificate</para>
+    </step>
+    <step>
+      <para>Configure Unified Invoker for SSL
+      </para>
+    </step>
+  </procedure>
+
+
+  <section id="sect-keystore-background">
+    <title>SSL Encryption overview</title>
+
+    <section>
+      <title>Key pairs and Certificates</title>
+
+      <para>Secure Sockets Layer (SSL) encrypts network traffic between two systems. Traffic between the two systems is encrypted using a two-way key, generated during the <firstterm>handshake</firstterm> phase of the connection and known only by those two systems.
+      </para>
+      <para>
+        For secure exchange of the two-way encryption key, SSL makes use of Public Key Infrastructure (PKI), a method of encryption that utilizes a <firstterm>key pair</firstterm>. A key pair consists of two separate but matching cryptographic keys - a public key and a private key. The public key is shared with others and is used to encrypt data, and the private key is kept secret and is used to decrypt data that has been encrypted using the public key. When a client requests a secure connection a handshake phase takes place before secure communication can begin. During the SSL handshake the server passes its public key to the client in the form of a certificate. The certificate contains the identity of the server (its URL), the public key of the server, and a digital signature that validates the certificate. The client then validates the certificate and makes a decision about whether the certificate is trusted or not. If the certificate is trusted, the client generates the two-way encryption key for the SSL connection, encrypts it using the public key of the server, and sends it back to the server. The server decrypts the two-way encryption key, using its private key, and further communication between the two machines over this connection is encrypted using the two-way encryption key.
+      </para>
+
+      <para>
+        On the server, public/private key pairs are stored in a <firstterm>key store</firstterm>, an encrypted file that stores key pairs and trusted certificates. Each key pair within the key store is identified by an <firstterm>alias</firstterm> - a unique name that is used when storing or requesting a key pair from the key store. The public key is distributed to clients in the form of a <firstterm>certificate</firstterm>, a digital signature which binds together a public key and an identity. On the client, certificates of known validity are kept in the default key store known as a <firstterm>trust store</firstterm>.
+      </para>
+
+      <formalpara>
+        <title>CA-signed and self-signed certificates</title>
+
+        <para>Public Key Infrastructure relies on a chain of trust to establish the credentials of unknown machines. The use of public keys not only encrypts traffic between machines, but also functions to establish the identity of the machine at the other end of a network connection. A "Web of Trust" is used to verify the identity of servers. A server may be unknown to you, but if its public key is signed by someone that you trust, you extend that trust to the server. Certificate Authorities are commercial entities who verify the identity of customers and issue them signed certificates. The JDK includes a <filename>cacerts</filename> file with the certificates of several trusted Certificate Authorities (CAs). Any keys signed by these CAs will be automatically trusted. Large organizations may have their own internal Certificate Authority, for example using Red Hat Certificate System. In this case the signing certificate of the internal Certificate Authority is typically installed on clients as part of a Corporate Standard Build, and then all certificates signed with that certificate are trusted. CA-signed certificates are best practice for production scenarios.
+        </para>
+      </formalpara> 
+
+      <para>
+        During development and testing, or for small-scale or internal-only production scenarios, you may use a <firstterm>self-signed certificate</firstterm>. This is certificate that is not signed by a Certificate Authority, but rather with a locally generated certificate. Since a locally generated certificate is not in the <filename>cacerts</filename> file of clients, you need to export a certificate for that key on the server, and import that certificate on any client that will connect via SSL. 
+      </para>
+
+      <para>
+        The JDK includes <filename>keytool</filename>, a command line tool for generating key pairs and certificates. The certificates generated by <filename>keytool</filename> can be sent for signing by a CA or can be distributed to clients as a self-signed certificate.
+      </para>
+
+      <itemizedlist>
+        <listitem>
+          <para>Generating a self-signed certificate for development use and importing that certificate to a client is described in <xref linkend="sect-generate-self-signed-cert"/>.
+          </para>
+        </listitem> 
+<!-- * Generating a certificate with keytool and having it signed by a CA is described in Procedure .-->
+        <listitem>
+          <para>Generating a certificate and having it signed by a CA for production use is beyond the scope of this edition. Refer to the manpage for keytool for further information on performing this task.
+          </para>
+        </listitem>
+      </itemizedlist>
+    </section>
+  </section>
+
+  <section id="sect-generate-keys-and-cert">
+    <title>Generate encryption keys and certificate</title>
+  
+    <section id="sect-generate-self-signed-cert">
+      <title>Generate a self-signed certificate with keytool</title>
+    
+      <section>
+        <title>Generate a keypair</title>
+
+        <para>
+           The <application>keytool</application> command, part of the JDK, is used to generate a new key pair. Keytool can either add the new key pair to an existing key store, or create a new key store at the same time as the key pair. 
+        </para>
+        
+        <para>
+          This key pair will be used to negotiate SSL encryption between the server and remote clients. The following procedure generates a key pair and stores it in a key store called <filename>localhost.keystore</filename>. You will need to make this key store available to the EJB3 invoker on the server. The key pair in our example will be saved in the key store under the alias 'ejb-ssl'. We will need this key alias, and the key pair password you supply (if any), when configuring the EJB3 Remoting connector in <xref linkend="sect-create-ejb3-remoting-connector"/>. 
+        </para>
+        
+        <procedure id="proc-generate-new-key-pair">
+          <title>Generate a new key pair and add it to the key store "localhost.keystore"</title>
+          <step>
+            <para>In your home directory, issue the following command, substituting a new password for <replaceable>EJB-SSL_KEYPAIR_PASSWORD</replaceable>:</para>
+            <screen><command>keytool -genkey -alias ejb-ssl -keypass <replaceable>EJB-SSL_KEYPAIR_PASSWORD</replaceable> -keystore localhost.keystore</command></screen>
+          </step>
+          <step>
+            <para>
+              Enter the key store password, if this key store already exists; otherwise enter and re-enter a password for a new key store that will be created.
+            </para>
+          </step>
+          <step>
+            <para>Issue the command:</para>
+            <screen><command>dir</command></screen>
+            <formalpara>
+              <title>Result:</title>
+              <para>You should now see the file <filename>localhost.keystore</filename>.</para>
+            </formalpara>
+          </step>
+        </procedure>
+
+        <note>
+          <para>Key store files should be stored on a secure file system, and should be readable only by the owner of the JBoss Application Server process.</para>
+        </note>
+
+        <para>
+          Note that if no key store is specified on the command line, <command>keytool</command> will add the key pair to a new key store called <filename>keystore</filename> in the current user's home directory. This key store file will be a hidden file.
+        </para>
+      </section>
+      
+      <section id="sect-export-self-signed-cert">
+        <title>Export a self-signed certificate</title>
+
+        <para>
+          Once a key pair has been generated for the server to use, a certificate must be created. <xref linkend="proc-export-self-signed-cert"/> details the steps to export the <filename>ejb-ssl</filename> key from the key store named <filename>localhost.keystore</filename>.
+        </para>
+
+        <procedure id="proc-export-self-signed-cert">
+          <title>Export a certificate</title>
+          <step>
+            <para>Issue the following command:</para>
+            <screen><command>keytool -export -alias ejb-ssl -file mycert.cer -keystore localhost.keystore</command></screen>
+          </step>
+          <step>
+            <para>Enter the key store password</para>
+            <formalpara>
+              <title>Result:</title>
+              <para>A certificate will be exported to the file <filename>mycert.cer</filename>.</para>
+            </formalpara>
+          </step>
+        </procedure>
+      </section>
+    </section>
+
+    <section>
+      <title>Configure a client to accept a self-signed server certificate</title>
+
+<!-- NOTE: in the next cut of this we will have a section on using signed certificates. Lots of this info is in man keytool -->
+<!-- Also, this relates to the generation of the key pair, but it also relates to client configuration, so it's not clear to me whether it should immediately precede "Importing the key on the client" -->
+
+      <para>
+        Any client machine that will make remote method invocations over SSL needs to trust the certificate of the server. Since the certificate we generated is self-signed, and has no chain of trust to a known certificate authority, the client must be explicitly configured to trust the certificate or the connection will fail. Configuring a client to trust a self-signed certificate requires importing the self-signed server certificate to a trust store on the client.
+      </para>
+
+      <para>
+        A trust store is a key store that contains trusted certificates. Certificates that are in the local trust store will be accepted as valid. If your server uses a self-signed certificate then any clients that will make remote method calls over SSL must have that certificate in their trust store. You must export your public key as a certificate, and then import that certificate to the trust store on those clients.
+      </para>
+
+      <para>
+        The certificate created in <xref linkend="sect-export-self-signed-cert"/> must be copied to the client in order to perform the steps detailed in <xref linkend="import-cert-to-trust-store"/>.
+      </para>
+
+      <procedure id="import-cert-to-trust-store">
+        <title>Import the certificate to the trust store "localhost.truststore"</title>
+        <step>
+          <para>Issue the following command on the client:</para>
+          <screen><command>keytool -import -alias ejb-ssl -file mycert.cer -keystore localhost.truststore</command></screen>
+        </step>
+        <step>
+          <para>Enter the password for this trust store if it already exists; otherwise enter and re-enter the password for the trust store that will be created.</para>
+        </step>
+        <step>
+          <para>Verify the details of the certificate, and if it is the correct one, type 'yes' to import it to the trust store.</para>
+          <formalpara>
+            <title>Result:</title>
+            <para>The certificate will be imported to the trust store, and you will be able to establish a secure connection with a server that uses this certificate.</para>
+          </formalpara>
+        </step>
+      </procedure>
+
+      <para>
+        As with the key store, if the trust store specified does not already exist, it will be created. However, in contrast with the key store, there is no default trust store, and one must be specified.
+      </para>
+      
+      <formalpara>
+        <title>Configure Client to use localhost.truststore</title>
+
+        <para>
+          Now that you have imported the self-signed server certificate to a trust store on the client, you must instruct the client to use this trust store. This is done by passing the <filename>localhost.truststore</filename> location to the application using the <classname>javax.net.ssl.trustStore</classname> property, and the trust store password using the <classname>javax.net.ssl.trustStorePassword</classname> property. <xref linkend="ex-Invoke-with-trust-store"/> is an example commandline that would be used to invoke the application <application>com.acme.RunClient</application>, which will make remote method calls to an EJB on a JBoss Application Server. 
+        </para>
+      </formalpara>
+      <example id="ex-Invoke-with-trust-store">
+        <title>Invoking the com.acme.Runclient application with a specific trust store</title>
+
+        <screen><command>java -Djavax.net.ssl.trustStore=${resources}/localhost.truststore \
+    -Djavax.net.ssl.trustStorePassword=<replaceable>TRUSTSTORE_PASSWORD</replaceable> com.acme.RunClient</command></screen>
+      </example>
+    </section>
+  </section>
+
+  <section>
+    <title>EJB3 Configuration</title>
+    <section id="sect-create-ejb3-remoting-connector">
+      <title>Create a secure remoting connector for EJB3</title>
+      
+      <para> 
+        The file <filename>ejb3-connectors-jboss-beans.xml </filename> in a JBoss Application Server profile's <filename>deploy</filename> directory contains JBoss Remoting connector definitions for EJB3 remote method invocation. <xref linkend="example-ejb3-remoting-connector"/> is a sample configuration that defines a secure connector for EJB3 using the key pair created in <xref linkend="proc-generate-new-key-pair"/>. The <classname>keyPassword</classname> property in the sample configuration is the key pair password that was specified when the key pair was created. 
+      </para>
+
+      <example id="example-ejb3-remoting-connector">
+        <title>Sample Secure EJB3 Connector</title>
+        <screen><![CDATA[<bean name="EJB3SSLRemotingConnector" class="org.jboss.remoting.transport.Connector"> 
+    <property name="invokerLocator">sslsocket://${jboss.bind.address}:3843</property> 
+    <property name="serverConfiguration"> 
+      <inject bean="ServerConfiguration" /> 
+    </property> 
+    <property name="serverSocketFactory"> 
+      <inject bean="sslServerSocketFactory" /> 
+    </property> 
+  </bean>
+
+  <bean name="sslServerSocketFactory" class="org.jboss.security.ssl.DomainServerSocketFactory"> 
+     <constructor> 
+        <parameter><inject bean="EJB3SSLDomain"/></parameter> 
+     </constructor> 
+  </bean> 
+  <bean name="EJB3SSLDomain" class="org.jboss.security.plugins.JaasSecurityDomain"> 
+     <constructor> 
+        <parameter>EJB3SSLDomain</parameter> 
+     </constructor> 
+     <property name="keyStoreURL">resource:localhost.keystore</property> 
+     <property name="keyStorePass">KEYSTORE_PASSWORD</property> 
+     <property name="keyAlias">ejb-ssl</property>
+     <property name="keyPassword">EJB-SSL_KEYPAIR_PASSWORD</property>
+  </bean>]]></screen>
+      </example>
+
+      <para>The sample configuration will create a connector that listens for SSL connections on port 3843. This port will need to be opened on the server firewall for access by clients.</para>
+
+    </section>
+
+    <section>
+      <title>Configure EJB3 Beans for SSL Transport</title>
+
+      <para>
+        All EJB3 beans use the unsecured RMI connector by default. In order to enabled a bean to be invoked via SSL, the bean needs to be annotated with <classname>@org.jboss.annotation.ejb.RemoteBinding</classname>.
+      </para>
+
+      <para>  
+        The annotation in <xref linkend="example-ejb3-annotation"/> will bind an EJB3 bean to the JNDI name <classname>StatefulSSL</classname>. The proxy implementing the remote interface, returned to a client when the bean is requested from JNDI, will communicate with the server via SSL.
+      </para>
+
+      <example id="example-ejb3-annotation">
+        <title>EJB3 bean annotation to enable secure remote invocation</title>
+        <screen><![CDATA[@RemoteBinding(clientBindUrl="sslsocket://0.0.0.0:3843", jndiBinding="StatefulSSL"),
+     @Remote(BusinessInterface.class)
+     public class StatefulBean implements BusinessInterface
+     {
+        ...
+     }]]></screen>
+      </example>
+
+      <note>
+        <para>In <xref linkend="example-ejb3-annotation"/> the IP address is specified as 0.0.0.0, meaning "all interfaces". This should be changed in practice to the value of the ${jboss.bind.address} system property.</para>
+      </note>
+    <!-- Question here: are we saying that it has to be hard-coded in here? What about portability between servers? Can it be specified literally as "${jboss.bind.address}"? -->
+
+      <formalpara>
+        <title>Enabling both secure and insecure invocation of an EJB3 bean</title>
+
+        <para>
+          You can enable both secure and insecure remote method invocation of the same EJB3 bean. <xref linkend="example-secure-and-insecure-ejb3-annotation"/> demonstrates the annotations to do this.
+        </para>
+      </formalpara>
+     
+      <example id="example-secure-and-insecure-ejb3-annotation">
+        <title>EJB3 Bean annotation for both secure and insecure remote invocation</title>
+        <screen><![CDATA[ @RemoteBindings({
+        @RemoteBinding(clientBindUrl="sslsocket://0.0.0.0:3843", jndiBinding="StatefulSSL"),
+        @RemoteBinding(jndiBinding="StatefulNormal")
+     })
+     @Remote(BusinessInterface.class)
+     public class StatefulBean implements BusinessInterface
+     {
+        ...
+     }]]>
+        </screen>
+      </example>
+
+      <para>
+        If a client requests <classname>StatefulNormal</classname> from JNDI, the returned proxy implementing the remote interface will communicate with the server via the unencrypted socket protocol; and if <classname>StatefulSSL</classname> is requested, the returned proxy implementing the remote interface will communicate with the server via SSL.
+      </para>
+    </section>
+  </section>
+
+  <section>
+    <title>EJB2 Configuration</title>
+
+<!-- This section needs to be worked over. What's going on here? Are we making the unified invoker do everything over SSL? Or *adding* SSL support?
+Is this RMI over SSL? SSL over HTTP?
+It needs to be clearly explained.
+
+It looks like it changes the system such that all EJB2 invocations must be made via SSL, but I'm not sure
+-->
+
+    <para>EJB2 remote invocation uses a single unified invoker, which runs by default on port 4446. The configuration of the unified invoker used for EJB2 remote method invocation is defined in the <filename>deploy/remoting-jboss-beans.xml</filename> file of a JBoss Application Server profile. Add the following SSL Socket Factory bean and an SSL Domain bean in this file.</para>
+
+    <example>
+      <title>SSL Server Factory for EJB2</title>
+      <screen><![CDATA[<bean name="sslServerSocketFactoryEJB2" class="org.jboss.security.ssl.DomainServerSocketFactory"> 
+  <constructor> 
+    <parameter><inject bean="EJB2SSLDomain"/></parameter> 
+  </constructor> 
+</bean>
+ 
+<bean name="EJB2SSLDomain" class="org.jboss.security.plugins.JaasSecurityDomain"> 
+  <constructor> 
+    <parameter>EJB2SSLDomain</parameter> 
+  </constructor> 
+  <property name="keyStoreURL">resource:localhost.keystore</property> 
+  <property name="keyStorePass">changeit</property> 
+  <property name="keyAlias">ejb-ssl</property>
+  <property name="keyPassword">EJB-SSL_KEYPAIR_PASSWORD</property>
+</bean>]]>
+      </screen>      
+    </example>
+
+    <formalpara>
+      <title>Configure SSL Transport for Beans</title>
+      <para>In the <filename>deploy/remoting-jboss-beans.xml</filename> file in the JBoss Application Server profile, update the code to reflect the information below:</para>
+    </formalpara>
+
+    <example>
+      <title>SSL Transport for Beans</title>
+      <screen><![CDATA[... 
+<bean name="UnifiedInvokerConnector" class="org.jboss.remoting.transport.Connector"> 
+  <annotation>@org.jboss.aop.microcontainer.aspects.jmx.JMX(name="jboss.remoting:service=Connector,transport=socket", exposedInterface=org.jboss.remoting.transport.ConnectorMBean.class,registerDirectly=true)
+  </annotation> 
+  <property name="serverConfiguration"><inject bean="UnifiedInvokerConfiguration"/></property> 
+  <!-- add this to configure the SSL socket for the UnifiedInvoker --> 
+  <property name="serverSocketFactory"><inject bean="sslServerSocketFactoryEJB2"/></property>
+   </bean> 
+   ... 
+<bean name="UnifiedInvokerConfiguration" class="org.jboss.remoting.ServerConfiguration"> 
+  <constructor> 
+  <!-- transport: Others include sslsocket, bisocket, sslbisocket, http, https, rmi, sslrmi, servlet, sslservlet. --> 
+    <parameter>sslsocket</parameter><!-- changed from socket to sslsocket --> 
+  </constructor> 
+      ... 
+   </bean> 
+   ...]]>
+      </screen>
+    </example>
+    
+  </section>
+   
+
+    
+</chapter>
+

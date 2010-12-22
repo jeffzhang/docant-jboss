@@ -1,0 +1,302 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.3//EN" "http://www.oasis-open.org/docbook/xml/4.3/docbookx.dtd">
+
+   <chapter id="JBoss_Security_Model">
+      <title>JBoss Security Model</title>
+      <para>
+         Similar to the rest of the JBoss architecture, security at the lowest level is defined as a set of interfaces for which alternate implementations may be provided. The following interfaces define the JBoss server security layer:
+      </para>
+     
+      <itemizedlist>
+         <listitem>
+            <para>
+               <emphasis role="bold">org.jboss.security.AuthenticationManager</emphasis>
+            </para>
+         </listitem>
+         <listitem>
+            <para>
+               <emphasis role="bold">org.jboss.security.RealmMapping</emphasis>
+            </para>
+         </listitem>
+         <listitem>
+            <para>
+               <emphasis role="bold">org.jboss.security.SecurityProxy</emphasis>
+            </para>
+         </listitem>
+         <listitem>
+            <para>
+               <emphasis role="bold">org.jboss.security.AuthorizationManager</emphasis>
+            </para>
+         </listitem>
+         <listitem>
+            <para>
+               <emphasis role="bold">org.jboss.security.AuditManager</emphasis>
+            </para>
+         </listitem>
+         <listitem>
+            <para>
+               <emphasis role="bold">org.jboss.security.MappingManager</emphasis>
+            </para>
+         </listitem>
+      </itemizedlist>
+
+      <para>
+         <xref linkend="JBoss_Security_Model-The_key_security_model_interfaces_and_their_relationship_to_the_JBoss_server_EJB_container_elements." /> shows a class diagram of the security interfaces and their relationship to the EJB container architecture.
+      </para>
+
+      <figure id="JBoss_Security_Model-The_key_security_model_interfaces_and_their_relationship_to_the_JBoss_server_EJB_container_elements.">
+         <title>The key security model interfaces and their relationship to the JBoss server EJB container elements.</title>
+         <mediaobject>
+            <imageobject>
+               <imagedata align="center" fileref="images/AS6_SecurityModel_Interface.png" />
+            </imageobject>
+         </mediaobject>
+      </figure>
+
+      <para>
+          The EJB Container layer is represented by the classes <literal>org.jboss.ejb.Container</literal>, <literal>org.jboss.SecurityInterceptor</literal> and                                                         <literal>org.jboss.SecurityProxyInterceptor</literal>. The other classes are interfaces and classes provided by the JBoss security subsystem.
+      </para>
+
+      <para>
+         The two interfaces required for the J2EE security model implementation are:
+      </para>
+
+      <itemizedlist>
+         <listitem>
+            <para>
+               <emphasis role="bold">org.jboss.security.AuthenticationManager</emphasis>
+            </para>
+         </listitem>
+         <listitem>
+            <para>
+               <emphasis role="bold">org.jboss.security.AuthorizationManager</emphasis>
+            </para>
+         </listitem>
+      </itemizedlist>
+
+      <para>
+         The roles of the security interfaces presented in <xref linkend="JBoss_Security_Model-The_key_security_model_interfaces_and_their_relationship_to_the_JBoss_server_EJB_container_elements." /> are             summarized below.
+      </para>
+
+      <itemizedlist>
+         <listitem>
+            <para>
+               <emphasis role="bold">AuthenticationManager</emphasis>: This interface is responsible for validating credentials associated with <emphasis>Principals</emphasis>. Principals are identities,                   such as usernames, employee numbers, and social security numbers. <emphasis>Credentials</emphasis> are proof of the identity, such as passwords, session keys, and digital signatures. The                     <literal>isValid</literal> method is invoked to determine whether a user identity and associated credentials as known in the operational environment are valid proof of the user's                             identity.
+            </para>
+         </listitem>
+         <listitem>
+            <para>
+               <emphasis role="bold">AuthorizationManager</emphasis>: This interface is responsible for the access control mandated by the J2EE specifications. The implementation of this interface provides                 the ability to stack a set of Policy Providers useful for pluggable authorization.
+            </para>
+         </listitem>
+         <listitem>
+            <para>
+               <emphasis role="bold">SecurityProxy</emphasis>: This interface describes the requirements for a custom <literal>SecurityProxyInterceptor</literal> plugin. A <literal>SecurityProxy</literal>                  allows for the externalization of custom security checks on a per-method basis for both the EJB home and remote interface methods.
+            </para>
+         </listitem>
+         <listitem>
+            <para>
+               <emphasis role="bold">AuditManager</emphasis>: This interface is responsible for providing an audit trail of security events.
+            </para>
+         </listitem>
+         <listitem>
+            <para>
+               <emphasis role="bold">MappingManager</emphasis>: This interface is responsible for providing mapping of Principal, Role, and Attributes. The implementation of AuthorizationManager may                        internally call the mapping manager to map roles before performing access control.
+            </para>
+         </listitem>
+         <listitem>
+            <para>
+               <emphasis role="bold">RealMapping</emphasis>: This interface is responsible for principal mapping and role mapping. The <literal>getPrincipal</literal> method takes an user identity as known                 in the operational environment and returns the application domain identity. The <literal>doesUserHaveRole</literal> method validates that the user identity in the operation environment has                   been assigned the indicated role from the application domain.
+            </para>
+         </listitem>
+      </itemizedlist>
+
+      <para>
+         Note that the <literal>AuthenticationManager</literal>, <literal>RealmMapping</literal> and <literal>SecurityProxy</literal> interfaces have no association to JAAS related classes. Although the              JBossSX framework is heavily dependent on JAAS, the basic security interfaces required for implementation of the J2EE security model are not. The JBossSX framework is simply an implementation of the         basic security plugin interfaces that are based on JAAS.
+      </para>
+
+      <para>
+         The component diagram in <xref linkend="JBoss_Security_Model-The_relationship_between_the_JBossSX_framework_implementation_classes_and_the_JBoss_server_EJB_container_layer." /> illustrates this              fact. The implication of this plug-in architecture is that you are free to replace the JAAS-based JBossSX implementation classes with your own non-JAAS custom security manager implementation. You'll         see how to do this when you look at the JBossSX MBeans available for JBossSX configuration in                                                                                                                  <xref linkend="JBoss_Security_Model-The_relationship_between_the_JBossSX_framework_implementation_classes_and_the_JBoss_server_EJB_container_layer." />.
+      </para>
+
+      <figure id="JBoss_Security_Model-The_relationship_between_the_JBossSX_framework_implementation_classes_and_the_JBoss_server_EJB_container_layer.">
+         <title>The relationship between the JBossSX framework implementation classes and the JBoss server EJB container layer.</title>
+         <mediaobject>
+            <imageobject>
+               <imagedata align="center" fileref="images/j2ee_chap8-7.jpg" />
+            </imageobject>
+         </mediaobject>
+      </figure>
+
+      <section id="JBoss_Security_Model-Enabling_Declarative_Security_in_JBoss_Revisited">
+         <title>Enabling Declarative Security in JBoss Revisited</title>
+         <para>
+            Earlier in this chapter, the discussion of the J2EE standard security model ended with a requirement for the use of JBoss server-specific deployment descriptor to enable security. The details of             this configuration are presented here.                                                                                                                                                                         <xref linkend="Enabling_Declarative_Security_in_JBoss_Revisited-The_security_element_subsets_of_the_JBoss_server_jboss.xml_and_jboss_web.xml_deployment_descriptors." /> shows the JBoss-specific              EJB and web application deployment descriptor&#39;s security-related elements.
+         </para>
+
+         <figure id="Enabling_Declarative_Security_in_JBoss_Revisited-The_security_element_subsets_of_the_JBoss_server_jboss.xml_and_jboss_web.xml_deployment_descriptors.">
+            <title>The security element subsets of the JBoss server jboss.xml and jboss-web.xml deployment descriptors.</title>
+            <mediaobject>
+               <imageobject>
+                  <imagedata align="center" fileref="images/j2ee_chap8-8.jpg" />
+               </imageobject>
+            </mediaobject>
+         </figure>
+	
+         <para>
+            The value of a <literal>security-domain</literal> element specifies the JNDI name of the security manager interface implementation that JBoss uses for the EJB and web containers. This is an                  object that implements both of the <literal>AuthenticationManager</literal> and <literal>RealmMapping</literal> interfaces. When specified as a top-level element it defines what security domain              in effect for all EJBs in the deployment unit. This is the typical usage because mixing security managers within a deployment unit complicates inter-component operation and administration.
+         </para>
+
+         <para>
+            To specify the security domain for an individual EJB, you specify the <literal>security-domain</literal> at the container configuration level. This will override any top-level security-domain                element.
+         </para>
+
+         <para>
+            The <literal>unauthenticated-principal</literal> element specifies the name to use for the <literal>Principal</literal> object returned by the <literal>EJBContext.getUserPrincipal</literal>                  method when an unauthenticated user invokes an EJB. Note that this conveys no special permissions to an unauthenticated caller. Its primary purpose is to allow unsecured servlets and JSP pages               to invoke unsecured EJBs and allow the target EJB to obtain a non-null <literal>Principal</literal> for the caller using the <literal>getUserPrincipal</literal> method. This is a J2EE                        specification requirement.
+         </para>
+
+         <para>
+            The <literal>security-proxy</literal> element identifies a custom security proxy implementation that allows per-request security checks outside the scope of the EJB declarative security model                without embedding security logic into the EJB implementation. This may be an implementation of the <literal>org.jboss.security.SecurityProxy</literal> interface, or just an object that implements            methods in the home, remote, local home or local interfaces of the EJB to secure without implementing any common interface. If the given class does not implement the                                          <literal>SecurityProxy</literal> interface, the instance must be wrapped in a <literal>SecurityProxy</literal> implementation that delegates the method invocations to the object. The                         <literal>org.jboss.security.SubjectSecurityProxy</literal> is an example <literal>SecurityProxy</literal> implementation used by the default JBossSX installation.
+         </para>
+
+         <para>
+            Take a look at a simple example of a custom <literal>SecurityProxy</literal> in the context of a trivial stateless session bean. The custom <literal>SecurityProxy</literal> validates that no one             invokes the bean&#39;s <literal>echo</literal> method with a four-letter word as its argument. This is a check that is not possible with role-based security; you cannot define a                              <literal>FourLetterEchoInvoker</literal> role because the security context is the method argument, not a property of the caller. The code for the custom <literal>SecurityProxy</literal> is given             in <xref linkend="Enabling_Declarative_Security_in_JBoss_Revisited-The_example_1_custom_EchoSecurityProxy_implementation_that_enforces_the_echo_argument_based_security_constraint." />.
+         </para>
+
+         <example id="Enabling_Declarative_Security_in_JBoss_Revisited-The_example_1_custom_EchoSecurityProxy_implementation_that_enforces_the_echo_argument_based_security_constraint.">
+            <title>The example 1 custom EchoSecurityProxy implementation that enforces the echo argument-based security constraint.</title>
+            <programlisting>package org.jboss.book.security.ex1;
+                
+import java.lang.reflect.Method;
+import javax.ejb.EJBContext;
+                
+import org.apache.log4j.Category;
+                
+import org.jboss.security.SecurityProxy;
+                
+/** A simple example of a custom SecurityProxy implementation
+ *  that demonstrates method argument based security checks.
+ * @author Scott.Stark@jboss.org
+ * @version $Revision: 1.4 $
+ */
+public class EchoSecurityProxy implements SecurityProxy
+{
+    Category log = Category.getInstance(EchoSecurityProxy.class);
+    Method echo;
+    
+    public void init(Class beanHome, Class beanRemote,
+                     Object securityMgr)
+        throws InstantiationException
+    {
+        log.debug(&quot;init, beanHome=&quot;+beanHome
+                  + &quot;, beanRemote=&quot;+beanRemote
+                  + &quot;, securityMgr=&quot;+securityMgr);
+        // Get the echo method for equality testing in invoke
+        try {
+            Class[] params = {String.class};
+            echo = beanRemote.getDeclaredMethod(&quot;echo&quot;, params);
+        } catch(Exception e) {
+            String msg = &quot;Failed to finde an echo(String) method&quot;;
+            log.error(msg, e);
+            throw new InstantiationException(msg);
+        }
+    }
+    
+    public void setEJBContext(EJBContext ctx)
+    {
+        log.debug(&quot;setEJBContext, ctx=&quot;+ctx);
+    }
+    
+    public void invokeHome(Method m, Object[] args)
+        throws SecurityException
+    {
+        // We don&#39;t validate access to home methods
+    }
+
+    public void invoke(Method m, Object[] args, Object bean)
+        throws SecurityException
+    {
+        log.debug&quot;invoke, m=&quot;+m);
+        // Check for the echo method
+        if (m.equals(echo)) {
+            // Validate that the msg arg is not 4 letter word
+            String arg = (String) args[0];
+            if (arg == null || arg.length() == 4)
+                throw new SecurityException(&quot;No 4 letter words&quot;);
+        }
+        // We are not responsible for doing the invoke
+    }
+}           
+            </programlisting>
+         </example>
+
+         <para>
+            The <literal>EchoSecurityProxy</literal> checks that the method to be invoked on the bean instance corresponds to the <literal>echo(String)</literal> method loaded the init method. If there is a             match, the method argument is obtained and its length compared against 4 or null. Either case results in a <literal>SecurityException</literal> being thrown. Certainly this is a contrived                    example, but only in its application. It is a common requirement that applications must perform security checks based on the value of method arguments. The point of the example is to demonstrate             how custom security beyond the scope of the standard declarative security model can be introduced independent of the bean implementation. This allows the specification and coding of the security             requirements to be delegated to security experts. Since the security proxy layer can be done independent of the bean implementation, security can be changed to match the deployment environment               requirements.
+         </para>
+
+         <para>
+            The associated <literal>jboss.xml</literal> descriptor that installs the <literal>EchoSecurityProxy</literal> as the custom proxy for the <literal>EchoBean</literal> is given in                              <xref linkend="Enabling_Declarative_Security_in_JBoss_Revisited-The_jboss.xml_descriptor_which_configures_the_EchoSecurityProxy_as_the_custom_security_proxy_for_the_EchoBean." />.
+         </para>
+
+         <example id="Enabling_Declarative_Security_in_JBoss_Revisited-The_jboss.xml_descriptor_which_configures_the_EchoSecurityProxy_as_the_custom_security_proxy_for_the_EchoBean.">
+            <title>The jboss.xml descriptor, which configures the EchoSecurityProxy as the custom security proxy for the EchoBean.</title>
+            <programlisting>&lt;jboss&gt;
+    &lt;security-domain&gt;other&lt;/security-domain&gt;
+                
+    &lt;enterprise-beans&gt;
+        &lt;session&gt;
+            &lt;ejb-name&gt;EchoBean&lt;/ejb-name&gt;
+            &lt;security-proxy&gt;org.jboss.book.security.ex1.EchoSecurityProxy&lt;/security-proxy&gt;
+        &lt;/session&gt;
+    &lt;/enterprise-beans&gt;
+&lt;/jboss&gt; 
+            </programlisting>
+         </example>
+
+         <para>
+            Now test the custom proxy by running a client that attempts to invoke the <literal>EchoBean.echo</literal> method with the arguments <literal>Hello</literal> and <literal>Four</literal> as                   illustrated in this fragment:
+         </para>
+
+         <programlisting>public class ExClient
+{
+    public static void main(String args[])
+        throws Exception
+    {
+        Logger log = Logger.getLogger(&quot;ExClient&quot;);
+        log.info(&quot;Looking up EchoBean&quot;);
+
+        InitialContext iniCtx = new InitialContext();
+        Object ref = iniCtx.lookup(&quot;EchoBean&quot;);
+        EchoHome home = (EchoHome) ref;
+        Echo echo = home.create();
+
+        log.info(&quot;Created Echo&quot;);
+        log.info(&quot;Echo.echo(&#39;Hello&#39;) = &quot;+echo.echo(&quot;Hello=&quot;));
+        log.info(&quot;Echo.echo(&#39;Four&#39;) = &quot;+echo.echo(&quot;Four&quot;));
+    }
+}  
+         </programlisting>
+
+         <para>
+            The first call should succeed, while the second should fail due to the fact that <literal>Four</literal> is a four-letter word. Run the client as follows using Ant from the examples directory:
+         </para>
+
+         <programlisting>[examples]$ ant -Dchap=security -Dex=1 run-example
+run-example1:
+...
+     [echo] Waiting for 5 seconds for deploy...
+     [java] [INFO,ExClient] Looking up EchoBean
+     [java] [INFO,ExClient] Created Echo
+     [java] [INFO,ExClient] Echo.echo(&#39;Hello&#39;) = Hello
+     [java] Exception in thread &quot;main&quot; java.rmi.AccessException: SecurityException; nested exception is: 
+     [java]     java.lang.SecurityException: No 4 letter words
+...
+     [java] Caused by: java.lang.SecurityException: No 4 letter words
+...
+         </programlisting>
+
+         <para>
+            The result is that the <literal>echo(&#39;Hello&#39;)</literal> method call succeeds as expected and the <literal>echo(&#39;Four&#39;)</literal> method call results in a rather messy looking                 exception, which is also expected. The above output has been truncated to fit in the book. The key part to the exception is that the <literal>SecurityException("No 4 letter words")</literal>                 generated by the <literal>EchoSecurityProxy</literal> was thrown to abort the attempted method invocation as desired.
+         </para>
+      </section>
+   </chapter>

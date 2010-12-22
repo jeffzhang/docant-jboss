@@ -1,0 +1,51 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!DOCTYPE section PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd">
+<chapter id="Using_LdapExtLoginModule_with_JaasSecurityDomain">
+  <title>Using LdapExtLoginModule with JaasSecurityDomain</title>
+  <para>
+This chapter provides guidance on how the LdapExtLoginModule can be used with an encrypted password to be decrypted by a JaasSecurityDomain. This chapter assumes that the LdapExtLoginModule is already running correctly with a non-encrypted password. <!--#QUESTION Provide link to resource on configuring LdapExtLoginModule-->
+    </para>
+  <para>
+The first step is to define the JaasSecurityDomain MBean that is going to be used to decrypt the encrypted version of the password. This can then be added to the <filename>$JBOSS_HOME/server/$PROFILE/conf/jboss-service.xml</filename> or can be added to a *<filename>-service.xml</filename> descriptor in the deploy folder.
+     </para>
+  <programlisting language="XML">
+      <![CDATA[   
+  <mbean code="org.jboss.security.plugins.JaasSecurityDomain"
+      name="jboss.security:service=JaasSecurityDomain,domain=jmx-console">
+      <constructor>
+         <arg type="java.lang.String" value="jmx-console"></arg>
+      </constructor>
+      <attribute name="KeyStorePass">some_password</attribute>
+      <attribute name="Salt">abcdefgh</attribute>
+      <attribute name="IterationCount">66</attribute>
+   </mbean>]]>
+      </programlisting>
+  <para>
+This is a simple configuration where the required password, Salt and Iteration Count used for the encryption or decryption are contained within the MBean definition. <!-- It is possible to use any of the methods to obtain the password as described in the JaasSecurityDomain article.-->
+      </para>
+  <para>
+It should be noted that the default cipher algorithm used by the JaasSecurityDomain implementation is &quot;PBEwithMD5andDES&quot;. This can be modified using the &quot;CipherAlgorithm&quot; attribute.
+      </para>
+  <para>
+Ensure that you change the KeyStorePass, Salt, and IterationCount values for your own deployment.
+      </para>
+  <para>
+After this MBean has been defined, start the JBoss Enterprise Application Platform. Navigate to the JMX Console (<ulink url="http://localhost:8080/jmx-console/">http://localhost:8080/jmx-console/</ulink> by default) and select the <literal>org.jboss.security.plugins.JaasSecurityDomain</literal> MBean.
+      </para>
+  <para>
+    On the <literal>org.jboss.security.plugins.JaasSecurityDomain</literal> page, look for the <methodname>encode64(String password)</methodname> method. Pass the plain text version of the <varname>password</varname> being used by the LdapExtLoginModule to this method, and invoke it. The return value should be the encrypted version of the password encoded as Base64.
+        </para>
+  <para>
+Within the login module configuration, the following module-options should be set:
+        </para>
+  <programlisting language="XML"><![CDATA[
+ <module-option name="jaasSecurityDomain">jboss.security:service=JaasSecurityDomain,domain=jmx-console</module-option>
+  <module-option name="bindCredential">2gx7gcAxcDuaHaJMgO5AVo</module-option> ]]>
+        </programlisting>
+  <para>
+The first option is a new option to specify that the JaasSecurityDomain used previously should be used to decrypt the password.
+        </para>
+  <para>
+The bindCredential is then replaced with the encrypted form as Base64.
+        </para>
+</chapter>

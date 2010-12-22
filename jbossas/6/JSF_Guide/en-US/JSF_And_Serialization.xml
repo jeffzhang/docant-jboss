@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.3//EN" "http://www.oasis-open.org/docbook/xml/4.3/docbookx.dtd">
+
+  <chapter id="jsf.serialization.chapt">
+    <title>JSF and Serialization</title>
+    
+    <para>
+     Serialization can be one of the most costly operations in a JSF application.
+     This is especially true when using client side state-saving, but it can
+     also come into play when you use server-side state saving as well.
+    </para>
+
+      <section id="jboss.serialization">
+        <title>Using JBoss Serialization</title>
+        <para>
+          JBoss AS6 ships with a serialization provider that allows you to use
+          the JBossSerialization project with Mojarra 1.2 and 2.0.  While your
+          results will vary, using JBossSerialization may boost performance,
+          especially with older versions of Java.
+	</para>
+     
+       <para>
+         To enable JBossSerialization in Mojarra JSF, set the following context
+         parameter in your <filename>web.xml</filename> file.
+       </para>
+       
+       <programlisting><![CDATA[<context-param>
+   <param-name>com.sun.faces.serializationProvider</param-name>
+   <param-value>org.jboss.web.jsf.integration.serialization.JBossSerializationProvider</param-value>
+</context-param>]]>
+       </programlisting>
+       
+     </section>
+
+   </chapter>
+

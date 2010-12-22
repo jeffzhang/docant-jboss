@@ -1,0 +1,895 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.3//EN" "http://www.oasis-open.org/docbook/xml/4.3/docbookx.dtd">
+
+<chapter id="clustering-http">
+      <title>HTTP Services</title>
+      <para>HTTP session replication is used to replicate the state associated 
+      with web client sessions to other nodes in a cluster. Thus, in the event 
+      one of your nodes crashes, another node in the cluster will be
+      able to recover. Two distinct functions must be performed:</para>
+      <itemizedlist>
+        <listitem>
+          <para>Session state replication</para>
+        </listitem>
+        <listitem>
+          <para>Load-balancing of incoming invocations</para>
+        </listitem>
+      </itemizedlist>
+      <para>State replication is directly handled by JBoss. When you run JBoss 
+      in the <literal>all</literal> configuration, session state replication is 
+      enabled by default. Just configure your web application as 
+      <literal>&lt;distributable&gt;</literal> in its <filename>web.xml</filename> 
+      (see <xref linkend="clustering-http-state"/>), 
+      deploy it, and its session state is automtically replicated across all 
+      JBoss instances in the cluster.</para>
+      <para>However, load-balancing is a different story; it is not handled by 
+      JBoss itself and requires an external load balancer. This function could 
+      be provided by specialized hardware switches or routers (Cisco LoadDirector 
+      for example) or by specialized software running on commodity hardware. 
+      As a very common scenario, we will demonstrate how to set up a software 
+      load balancer using Apache httpd and mod_jk.</para>
+      
+      
+      <note><title>Note</title>
+	
+	      <para>A load-balancer tracks HTTP requests and, depending on the session 
+	      to which the request is linked, it dispatches the request to the 
+	      appropriate node. This is called load-balancing with sticky-sessions
+	      or session affinity: once a session is created on a node, every future 
+	      request will also be processed by that same node. Using a load-balancer 
+	      that supports sticky-sessions but not configuring your web application 
+	      for session replication allows you to scale very well by avoiding the 
+	      cost of session state replication: each request for a session will 
+	      always be handled by the same node. But in case a node dies, the state 
+	      of all client sessions hosted by this node (the shopping carts, for 
+	      example) will be lost and the clients will most probably need to login 
+	      on another node and restart with a new session. In many situations, it 
+	      is acceptable not to replicate HTTP sessions because all critical state 
+	      is stored in a database or on the client. In other situations, losing a 
+         client session is not acceptable and, in this case, session state 
+         replication is the price one has to pay.</para>
+      </note>
+      
+      <section id="clustering-http-modjk">
+      <title>Configuring load balancing using Apache and mod_jk</title>
+		      
+      <para>Apache is a well-known web server which can be extended by plugging in modules. One of these modules, mod_jk,  has been specifically designed to allow the forwarding of requests from Apache to a Servlet container. Furthermore, it is also able to load-balance HTTP calls to a set of Servlet containers while maintaining sticky sessions, which is what is most interesting for us in this section.</para>
+      
+      
+      <section id="clustering-http-download">
+        <title>Download the software</title>
+        <para>First of all, make sure that you have Apache installed. You can download Apache directly from
+                    Apache web site at <literal>http://httpd.apache.org/</literal>. Its installation is pretty
+                    straightforward and requires no specific configuration. As several versions of Apache exist, we
+                    advise you to use the latest stable 2.2.x version. We will consider, for the next sections, that you have installed
+                    Apache in the <literal>APACHE_HOME</literal> directory.</para>
+        <para>Next, download mod_jk binaries. Several versions of mod_jk exist as well. We strongly advise you
+                    to use mod_jk 1.2.x, as both mod_jk and mod_jk2 are deprecated, unsupported and no further
+                    development is going on in the community. The mod_jk 1.2.x binary can be downloaded from
+                        <literal>http://www.apache.org/dist/jakarta/tomcat-connectors/jk/binaries/</literal>. Rename the
+                    downloaded file to <literal>mod_jk.so</literal> and copy it under
+                    <literal>APACHE_HOME/modules/</literal>.</para>
+      </section>
+      <section>
+        <title>Configure Apache to load mod_jk</title>
+        <para>Modify APACHE_HOME/conf/httpd.conf and add a single line at the end of the file:</para>
+        <programlisting># Include mod_jk's specific configuration file  
+Include conf/mod-jk.conf  
+            </programlisting>
+        <para>Next, create a new file named <literal>APACHE_HOME/conf/mod-jk.conf</literal>:</para>
+        <programlisting>
+# Load mod_jk module
+# Specify the filename of the mod_jk lib
+LoadModule jk_module modules/mod_jk.so
+ 
+# Where to find workers.properties
+JkWorkersFile conf/workers.properties
+
+# Where to put jk logs
+JkLogFile logs/mod_jk.log
+ 
+# Set the jk log level [debug/error/info]
+JkLogLevel info 
+ 
+# Select the log format
+JkLogStampFormat  "[%a %b %d %H:%M:%S %Y]"
+ 
+# JkOptions indicates to send SSK KEY SIZE
+JkOptions +ForwardKeySize +ForwardURICompat -ForwardDirectories
+ 
+# JkRequestLogFormat
+JkRequestLogFormat "%w %V %T"
+               
+# Mount your applications
+JkMount /application/* loadbalancer
+ 
+# You can use external file for mount points.
+# It will be checked for updates each 60 seconds.
+# The format of the file is: /url=worker
+# /examples/*=loadbalancer
+JkMountFile conf/uriworkermap.properties               
+
+# Add shared memory.
+# This directive is present with 1.2.10 and
+# later versions of mod_jk, and is needed for
+# for load balancing to work properly
+JkShmFile logs/jk.shm 
+              
+# Add jkstatus for managing runtime data
+&lt;Location /jkstatus/&gt;
+    JkMount status
+    Order deny,allow
+    Deny from all
+    Allow from 127.0.0.1
+&lt;/Location&gt;</programlisting>
+        <para>Please note that two settings are very important:</para>
+        <itemizedlist>
+          <listitem>
+            <para>The <literal>LoadModule</literal> directive must reference the mod_jk library you have
+                            downloaded in the previous section. You must indicate the exact same name with the "modules"
+                            file path prefix.</para>
+          </listitem>
+          <listitem>
+            <para>The <literal>JkMount</literal> directive tells Apache which URLs it should forward to the
+                            mod_jk module (and, in turn, to the Servlet containers). In the above file, all requests
+                            with URL path <literal>/application/*</literal> are sent to the mod_jk load-balancer. This
+                            way, you can configure Apache to serve static contents (or PHP contents) directly and only
+                            use the loadbalancer for Java applications. If you only use mod_jk as a loadbalancer, you
+                            can also forward all URLs (i.e., <literal>/*</literal>) to mod_jk.</para>
+          </listitem>
+        </itemizedlist>
+        <para>In addition to the <literal>JkMount</literal> directive, you can also use the
+                    <literal>JkMountFile</literal> directive to specify a mount points configuration file, which
+                    contains multiple Tomcat forwarding URL mappings. You just need to create a
+                        <literal>uriworkermap.properties</literal> file in the <literal>APACHE_HOME/conf</literal>
+                    directory. The format of the file is <literal>/url=worker_name</literal>. To get things started,
+                    paste the following example into the file you created:</para>
+        <programlisting># Simple worker configuration file
+
+# Mount the Servlet context to the ajp13 worker
+/jmx-console=loadbalancer
+/jmx-console/*=loadbalancer
+/web-console=loadbalancer
+/web-console/*=loadbalancer</programlisting>
+        <para>This will configure mod_jk to forward requests to <literal>/jmx-console</literal> and
+                        <literal>/web-console</literal> to Tomcat.</para>
+        <para>You will most probably not change the other settings in <literal>mod_jk.conf</literal>. They are
+                    used to tell mod_jk where to put its logging file, which logging level to use and so on.</para>
+      </section>
+      <section id="clustering-http-nodes">
+        <title>Configure worker nodes in mod_jk</title>
+        <para>Next, you need to configure mod_jk workers file <literal>conf/workers.properties</literal>. This
+                    file specifies where the different Servlet containers are located and how calls should be
+                    load-balanced across them. The configuration file contains one section for each target servlet
+                    container and one global section. For a two nodes setup, the file could look like this:</para>
+<!-- The local worker comment is from here: http://jira.jboss.com/jira/browse/JBDOCS-102 -->
+        <programlisting># Define list of workers that will be used
+# for mapping requests
+worker.list=loadbalancer,status
+
+# Define Node1
+# modify the host as your host IP or DNS name.
+worker.node1.port=8009
+worker.node1.host=node1.mydomain.com 
+worker.node1.type=ajp13
+worker.node1.lbfactor=1
+worker.node1.cachesize=10
+
+# Define Node2
+# modify the host as your host IP or DNS name.
+worker.node2.port=8009
+worker.node2.host= node2.mydomain.com
+worker.node2.type=ajp13
+worker.node2.lbfactor=1
+worker.node2.cachesize=10
+
+# Load-balancing behaviour
+worker.loadbalancer.type=lb
+worker.loadbalancer.balance_workers=node1,node2
+worker.loadbalancer.sticky_session=1
+#worker.list=loadbalancer
+
+# Status worker for managing load balancer
+worker.status.type=status</programlisting>
+        <para>Basically, the above file configures mod_jk to perform weighted round-robin load balancing with
+                    sticky sessions between two servlet containers (i.e. JBoss AS instances) node1 and node2 listening on port
+                    8009.</para>
+        <para>In the <literal>workers.properties</literal> file, each node is defined using the
+                        <literal>worker.XXX</literal> naming convention where <literal>XXX</literal> represents an
+			arbitrary name you choose for each of the target Servlet containers. For each worker, you must specify the host name (or IP address) and the port number of the AJP13 connector running in the Servlet container.</para>
+	    
+	    
+        <para>The <literal>lbfactor</literal> attribute is the load-balancing factor for this specific worker.
+		It is used to define the priority (or weight) a node should have over other nodes. The higher this number is for a given worker relative to the other workers, the more HTTP requests the worker will receive. This setting can be used to differentiate servers with different processing power.</para>
+        <para>The <literal>cachesize</literal> attribute defines the size of the thread pools associated to the
+                    Servlet container (i.e. the number of concurrent requests it will forward to the Servlet container).
+                    Make sure this number does not outnumber the number of threads configured on the AJP13 connector of
+                    the Servlet container. Please review
+                        <literal>http://jakarta.apache.org/tomcat/connectors-doc/config/workers.html</literal> for
+                    comments on <literal>cachesize</literal> for Apache 1.3.x.</para>
+        <para>The last part of the <literal>conf/workers.properties</literal> file defines the loadbalancer
+                    worker. The only thing you must change is the
+                    <literal>worker.loadbalancer.balanced_workers</literal> line: it must list all workers previously
+                    defined in the same file: load-balancing will happen over these workers.</para>
+        <para>The <literal>sticky_session</literal> property specifies the cluster behavior for HTTP sessions.
+                    If you specify <literal>worker.loadbalancer.sticky_session=0</literal>, each request will be load
+		    balanced between node1 and node2; i.e., different requests for the same session will go to different servers. But when a user opens a session on one server, it is always necessary to always forward this user's requests to the same server, as long as that server is available. This is called a "sticky session", as the client is always using the same server he reached on his first request. To enable session stickiness, you need to set
+                        <literal>worker.loadbalancer.sticky_session</literal> to 1.</para>
+        <note>
+          <para>A non-loadbalanced setup with a single node requires a <literal>worker.list=node1</literal>
+                        entry.</para>
+        </note>
+      </section>
+      <section id="clustering-http-jboss">
+	      <title>Configuring JBoss to work with mod_jk</title>
+        <para>Finally, we must configure the JBoss AS instances on all clustered nodes so that they can
+                    expect requests forwarded from the mod_jk loadbalancer.</para>
+        <para>On each clustered JBoss node, we have to name the node according to the name specified in
+                        <literal>workers.properties</literal>. For instance, on JBoss instance node1, edit the
+			<literal>JBOSS_HOME/server/all/deploy/jbossweb.sar/server.xml</literal> file (replace
+                        <literal>/all</literal> with your own server name if necessary). Locate the
+                        <literal>&lt;Engine&gt;</literal> element and add an attribute <literal>jvmRoute</literal>:</para>
+        <programlisting>&lt;Engine name="jboss.web" defaultHost="localhost" jvmRoute="node1"&gt;
+... ...
+&lt;/Engine&gt;</programlisting>
+	    <para>You also need to be sure the AJP connector in server.xml is enabled (i.e., uncommented). It is enabled by default. 
+	    </para>
+<programlisting><![CDATA[<!-- An AJP 1.3 Connector on port 8009 -->
+<Connector protocol="AJP/1.3" port="8009" address="${jboss.bind.address}"
+   redirectPort="8443" />]]></programlisting>
+
+        <para>At this point, you have a fully working Apache+mod_jk load-balancer setup that will balance call
+                    to the Servlet containers of your cluster while taking care of session stickiness (clients will
+                    always use the same Servlet container).</para>
+        <note>
+          <para>For more updated information on using mod_jk 1.2 with JBoss AS, please refer to the JBoss
+                        wiki page at
+                        <literal>http://www.jboss.org/community/wiki/UsingModjk12WithJBoss</literal>.</para>
+        </note>
+      </section>
+
+      </section>
+<section id="clustering-http-state">
+	      <title>Configuring HTTP session state replication</title>
+	      <para>The preceding discussion has been focused on using mod_jk as a load balancer. The content of the remainder our discussion of clustering HTTP services in JBoss AS applies no matter what load balancer is used.
+	      </para>
+	      
+	      <para>In <xref linkend="clustering-http-nodes"/>, we covered how to use sticky sessions to make sure that a client in a session always hits the same server node in order to maintain the session state. However, sticky sessions by themselves are not an ideal solution. If a node goes down, all its session data is lost. A better and more reliable solution is to replicate session data across the nodes in the cluster. This way, if a server node fails or is shut down, the load balancer can fail over the next client request to any server node and obtain the same session state.</para>
+	      
+        
+      
+      <section id="clustering-http-app">
+        <title>Enabling session replication in your application</title>
+        <para>To enable replication of your web application sessions, you must tag 
+        the application as distributable in the
+                    <literal>web.xml</literal> descriptor. Here's an example:</para>
+        <programlisting>&lt;?xml version="1.0"?&gt; 
+&lt;web-app  xmlns="http://java.sun.com/xml/ns/j2ee"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+          xsi:schemaLocation="http://java.sun.com/xml/ns/j2ee 
+          http://java.sun.com/xml/ns/j2ee/web-app_2_4.xsd" 
+          version="2.4"&gt;
+
+    <emphasis role="bold">&lt;distributable/&gt;</emphasis>
+
+&lt;/web-app&gt;</programlisting>
+        <para> You can futher configure session replication using the <literal>replication-config</literal>
+                    element in the <literal>jboss-web.xml</literal> file. However, 
+                    the <literal>replication-config</literal> element only needs to be set
+                    if one or more of the default values described below is unacceptable.
+                    Here is an example: </para>
+        <programlisting><![CDATA[<!DOCTYPE jboss-web PUBLIC
+    -//JBoss//DTD Web Application 5.0//EN
+    http://www.jboss.org/j2ee/dtd/jboss-web_5_0.dtd>
+
+<jboss-web>
+   
+   <replication-config>
+      <cache-name>custom-session-cache</cache-name>
+      <replication-trigger>SET</replication-trigger>
+      <replication-granularity>ATTRIBUTE</replication-granularity>
+      <replication-field-batch-mode>true</replication-field-batch-mode>
+      <use-jk>false</use-jk>
+      <max-unreplicated-interval>30</max-unreplicated-interval>
+      <snapshot-mode>instant</snapshot-mode>
+      <snapshot-interval>1000</snapshot-interval>
+      <session-notification-policy>com.example.CustomPolicy</session-notification-policy>
+   </replication-config>
+
+</jboss-web>]]></programlisting>
+
+        <para>All of the above configuration elements are optional and can be ommitted 
+        if the default value is acceptable. A couple are commonly used; the rest
+        are very infrequently changed from the defaults. We'll cover the commonly used ones first.</para>
+        
+        <para>The <emphasis role="bold"><literal>replication-trigger</literal></emphasis> element determines when 
+        the container should consider that session data must be replicated across 
+        the cluster. The rationale for this setting is that after a mutable object 
+        stored as a session attribute is accessed from the session, in the absence 
+        of a <literal>setAttribute</literal> call the container has no clear way 
+        to know if the object (and hence the session state) has been modified 
+        and needs to be replicated. This element has 3 valid values:</para>
+        <itemizedlist>
+          <listitem>
+		  <para><emphasis role="bold">SET_AND_GET</emphasis> is conservative but not optimal (performance-wise): it will always replicate session data even if its content has not been modified but simply accessed. This setting made (a little) sense in AS 4 since using it was a way to ensure that every request triggered replication of the session's timestamp. Since setting <literal>max_unreplicated_interval</literal> to 0 accomplishes the same thing at much lower cost, using <literal>SET_AND_GET</literal> makes no sense with AS 5.</para>
+          </listitem>
+          <listitem>
+		  <para><emphasis role="bold">SET_AND_NON_PRIMITIVE_GET</emphasis> is conservative but will only replicate if an object of a non-primitive type has been accessed (i.e. the object is not of a well-known immutable JDK type such as <literal>Integer</literal>, <literal>Long</literal>, <literal>String</literal>, etc.) This is the default value.</para>
+          </listitem>
+          <listitem>
+		  <para><emphasis role="bold">SET</emphasis> assumes that the developer will explicitly call <literal>setAttribute</literal> on the session if the data needs to be replicated. This setting prevents unnecessary replication and can have a major beneficial impact on performance, but requires very good coding practices to ensure <literal>setAttribute</literal> is always called whenever a mutable object stored in the session is modified.</para>
+          </listitem>
+        </itemizedlist>
+        
+        <para>In all cases, calling <literal>setAttribute</literal> marks the session as needing replication.</para>
+        
+        <para>The <emphasis role="bold"><literal>replication-granularity</literal></emphasis> element determines the granularity of what gets replicated if the container determines session replication is needed.
+                    The supported values are: </para>
+        <itemizedlist>
+        
+         <listitem>
+        <para><emphasis role="bold">SESSION</emphasis> indicates that the entire session attribute map should be replicated when any attribute is considered modified. Replication occurs at request end. This option replicates the most data and thus incurs the highest replication cost, but since all attributes values are always replicated together it ensures that any references between attribute values will not be broken when the session is deserialized. For this reason it is the default setting.</para>
+          </listitem>          
+          <listitem>
+		  <para><emphasis role="bold">ATTRIBUTE</emphasis> indicates that only attributes that the session considers to be potentially modified are replicated. Replication occurs at request end. For sessions carrying large amounts of data, parts of which are infrequently updated, this option can significantly increase replication performance. However, it is not suitable for applications that store objects in different attributes that share references with each other (e.g. a <literal>Person</literal> object in the "husband" attribute sharing with another <literal>Person</literal> in the "wife" attribute a reference to an <literal>Address</literal> object). This is because if the attributes are separately replicated, when the session is deserialized on remote nodes the shared references will be broken.</para>
+          </listitem>	  
+	  <listitem>
+		  <para><emphasis role="bold">FIELD</emphasis> is useful if the classes stored in the session have been bytecode enhanced for use by POJO Cache.  If they have been, the session management layer will detect field level changes within objects stored to the session, and will replicate only those changes. This is the most performant setting. Replication is only for individual changed data fields inside session attribute objects. Shared object references will be preserved across the cluster. Potentially most performant, but requires changes to your application (this will be discussed later).</para>
+          </listitem>
+        </itemizedlist>
+   
+   <para>The other elements under the <literal>replication-config</literal> element are much less frequently used.</para>
+   
+   <para>The <emphasis role="bold"><literal>cacheName</literal></emphasis> element indicates the name of the 
+   JBoss Cache configuration that should be used for storing distributable 
+   sessions and replicating them around the cluster.  This element allows webapps that need 
+   different caching characteristics to specify the use of separate, differently 
+   configured, JBoss Cache instances. In AS 4 the cache to use was a server-wide 
+   configuration that could not be changed per webapp.  The default value is <literal>standard-session-cache</literal>
+   if the <literal>replication-granularity</literal> is not <literal>FIELD</literal>, 
+   <literal>field-granularity-session-cache</literal> if it is. See <xref linkend="clustering-http-state-cacheconfig"/> 
+   for more details on JBoss Cache configuration for web tier clustering.</para>
+   
+	<para>The <emphasis role="bold"><literal>replication-field-batch-mode</literal></emphasis> element indicates 
+   whether you want all replication messages associated with a request to be 
+   batched into one message.  Only applicable if <literal>replication-granularity</literal> 
+   is <literal>FIELD</literal>. If this is set to <literal>true</literal>, 
+   fine-grained changes made to objects stored in the session 
+   attribute map will replicate only when the http request is finished; otherwise 
+   they replicate as they occur. Setting this to <literal>false</literal> is not 
+   advised. Default is <literal>true</literal>.</para>
+   
+   <para>The <emphasis role="bold"><literal>useJK</literal></emphasis> element indicates whether the container 
+   should assume a JK-based software load balancer (e.g. mod_jk, mod_proxy, 
+   mod_cluster) is used for load balancing for this webapp. If set to <literal>true</literal>, 
+   the container will examine the session id associated with every request and 
+   replace the jvmRoute portion of the session id if it detects a failover.</para> 
+
+   <para>The default value is <literal>null</literal> (i.e. unspecified), in 
+   which case the session manager will use the presence or absence of a jvmRoute 
+   configuration on its enclosing JBoss Web <literal>Engine</literal> 
+   (see <xref linkend="clustering-http-jboss"/>) as indicating whether JK is used.</para> 
+
+  <para>The only real reason to set this element is to set it to <literal>false</literal>
+  for a particular webapp whose URL's the JK load balancer doesn't handle. Even doing 
+  that isn't really necessary.</para>
+  
+  <para>The <emphasis role="bold"><literal>max-unreplicated-interval</literal></emphasis> element configures the 
+  maximum interval between requests, in seconds, after which a request will 
+  trigger replication of the session's timestamp regardless of whether the 
+  request has otherwise made the session dirty.  Such replication ensures that 
+  other nodes in the cluster are aware of the most recent value for the session's 
+  timestamp and won't incorrectly expire an unreplicated session upon failover. 
+  It also results in correct values for HttpSession.getLastAccessedTime() calls 
+  following failover.</para>
+  
+  <para>A value of <literal>0</literal> means the timestamp will be replicated 
+  whenever the session is accessed.  A value of <literal>-1</literal> means the 
+  timestamp will be replicated only if some other activity during the request 
+  (e.g. modifying an attribute) has resulted in other replication work involving 
+  the session. A positive value greater than the 
+  <literal>HttpSession.getMaxInactiveInterval()</literal> value will be treated 
+  as a likely misconfiguration and converted to <literal>0</literal>; i.e. replicate 
+  the metadata on every request.  Default value is <literal>60</literal>.</para>
+  
+  <para>The <emphasis role="bold"><literal>snapshot-mode</literal></emphasis> element configures when sessions 
+  are replicated to the other nodes. Possible values are <literal>instant</literal>
+  (the default) and <literal>interval</literal>.</para> 
+
+  <para>The typical value, <literal>instant</literal>, replicates changes to the 
+  other nodes at the end of requests, using the request processing thread to 
+  perform the replication. In this case, the <literal>snapshot-interval</literal> 
+  property is ignored.</para> 
+
+  <para>With <literal>interval</literal> mode, a background task is created that 
+  runs every <literal>snapshot-interval</literal> milliseconds, checking for 
+  modified sessions and replicating them.</para> 
+
+  <para>Note that this property has no effect if <literal>replication-granularity</literal> 
+  is set to <literal>FIELD</literal>. If it is <literal>FIELD</literal>, 
+  <literal>instant</literal> mode will be used.</para>
+  
+  <para>The <emphasis role="bold"><literal>snapshot-interval</literal></emphasis> element defines how often 
+  (in milliseconds) the background task that replicates modified sessions 
+  should be started for this web app.  Only meaningful if <literal>snapshot-mode</literal> 
+  is set to <literal>interval</literal>.</para>
+  
+  <para>The <emphasis role="bold"><literal>session-notification-policy</literal></emphasis> element specifies the 
+  fully qualified class name of the implementation of the 
+  <literal>ClusteredSessionNotificationPolicy</literal> interface that should be 
+  used to govern whether servlet specification notifications should be emitted 
+  to any registered <literal>HttpSessionListener</literal>, <literal>HttpSessionAttributeListener</literal> 
+  and/or <literal>HttpSessionBindingListener</literal>.</para> 
+
+  <para>Event notifications that may make sense in a non-clustered environment 
+  may or may not make sense in a clustered environment; see 
+  <link linkend="https://jira.jboss.org/jira/browse/JBAS-5778">https://jira.jboss.org/jira/browse/JBAS-5778</link> 
+  for an example of why a notification may not be desired. Configuring an appropriate 
+  <literal>ClusteredSessionNotificationPolicy</literal> gives the application 
+  author fine-grained control over what notifications are issued.</para>
+
+  <para>In AS 5.0.0.GA the default value if not explicitly set is the 
+  <literal>LegacyClusteredSessionNotificationPolicy</literal>, which implements 
+  the behavior in previous JBoss versions. In the AS 5.1.0 release this was 
+  changed to <literal>IgnoreUndeployLegacyClusteredSessionNotificationPolicy</literal>, 
+  which implements the same behavior except for in undeployment situations,
+  during which no <literal>HttpSessionListener</literal> and 
+  <literal>HttpSessionAttributeListener</literal> notifications are sent.</para>
+   
+      </section>
+      
+      <section id="clustering-http-passivation">
+      <title>HttpSession Passivation and Activation</title>
+      <para>Passivation is the process of controlling memory usage by removing 
+      relatively unused sessions from memory while storing them in persistent 
+      storage. If a passivated session is requested by a client, it can be 
+      "activated" back into memory and removed from the persistent store. 
+      JBoss AS 5 supports passivation of HttpSessions from webapps whose 
+      <literal>web.xml</literal> includes the <literal>distributable</literal> 
+      tag (i.e. clustered webapps).</para>
+      
+      <para>Passivation occurs at 3 points during the lifecycle of a web application:</para>
+      
+      <itemizedlist>
+      <listitem>
+      <para>When the container requests the creation of a new session. 
+      If the number of currently active sessions exceeds a configurable limit, 
+      an attempt is made to passivate sessions to make room in memory.</para>
+      </listitem>
+      <listitem>
+      <para>Periodically (by default every ten seconds) as the JBoss Web 
+      background task thread runs.</para>
+      </listitem>
+      <listitem>
+      <para>When the web application is deployed and a backup copy of sessions 
+      active on other servers is acquired by the newly deploying web app's 
+      session manager.</para>
+      </listitem>
+      </itemizedlist>
+      
+      <para>A session will be passivated if one of the following holds true:</para>
+      
+      <itemizedlist>
+      <listitem>
+      <para>The session hasn't been used in greater than a configurable maximum idle time.</para>
+      </listitem>
+      <listitem>
+      <para>The number of active sessions exceeds a configurable maximum and the 
+      session hasn't been used in greater than a configurable minimum idle time.</para>
+      </listitem>
+      </itemizedlist>
+      
+      <para>In both cases, sessions are passivated on a Least Recently Used (LRU) basis.</para>
+      
+      <section id="clustering-http-passivation-config">
+      <title>Configuring HttpSession Passivation</title>
+      
+      <para>Session passivation behavior is configured via the 
+      <literal>jboss-web.xml</literal> deployment descriptor in your webapp's
+      <literal>WEB-INF</literal> directory.</para>
+      
+      <programlisting><![CDATA[<!DOCTYPE jboss-web PUBLIC
+    -//JBoss//DTD Web Application 5.0//EN
+    http://www.jboss.org/j2ee/dtd/jboss-web_5_0.dtd>
+
+<jboss-web>
+   
+   <max-active-sessions>20</max-active-sessions>
+   <passivation-config>
+      <use-session-passivation>true</use-session-passivation>
+      <passivation-min-idle-time>60</passivation-min-idle-time>
+      <passivation-max-idle-time>600</passivation-max-idle-time>
+   </passivation-config>
+
+
+</jboss-web>]]></programlisting>
+
+     <itemizedlist>
+     <listitem>
+     <para><emphasis role="bold">max-active-session</emphasis></para>
+     <para>Determines the maximum number of active sessions allowed. If the 
+     number of sessions managed by the the session manager exceeds this value 
+     and passivation is enabled, the excess will be passivated based on the 
+     configured <literal>passivation-min-idle-time</literal>. If after 
+     passivation is completed (or if passivation is disabled), the number of 
+     active sessions still exceeds this limit, attempts to create new sessions 
+     will be rejected. If set to <literal>-1</literal> (the default), there is no limit</para>
+     </listitem>
+     <listitem>
+     <para><emphasis role="bold">use-session-passivation</emphasis></para>
+     <para>Determines whether session passivation will be enabled for the web 
+     application. Default is <literal>false</literal>.</para>
+     </listitem>
+     <listitem>
+     <para><emphasis role="bold">passivation-min-idle-time</emphasis></para>
+     <para>Determines the minimum time (in seconds) that a session must have been 
+     inactive before the container will consider passivating it in order to 
+     reduce the active session count below <literal>max-active-sessions</literal>.  
+     A value of <literal>-1</literal> (the default) disables passivating sessions 
+     before passivation-max-idle-time.  Neither a value of <literal>-1</literal> 
+     nor a high value are recommended if <literal>max-active-sessions</literal> 
+     is set.</para>
+     </listitem>
+     <listitem>
+     <para><emphasis role="bold">passivation-max-idle-time</emphasis></para>
+     <para>Determines the maximum time (in seconds) that a session can be inactive 
+     before the container should attempt to passivate it to save memory. 
+     Passivation of such sessions will take place regardless of whether the 
+     active session count exceeds <literal>max-active-sessions</literal>.  Should 
+     be less than the web.xml <literal>session-timeout</literal> setting. A value 
+     of <literal>-1</literal> (the default) disables passivation based on maximum 
+     inactivity.</para>
+     </listitem>
+     </itemizedlist>
+
+      <para>Note that the number of sessions in memory includes sessions 
+      replicated from other cluster nodes that are not being accessed on this 
+      node. Be sure to account for that when setting 
+      <literal>max-active-sessions</literal>. Note also that the number of 
+      sessions replicated from other nodes may differ greatly depending on 
+      whether buddy replication is enabled. In an 8 node cluster where each 
+      node is handling requests from 100 users, with total replication each 
+      node will have 800 sessions in memory. With buddy replication with the 
+      default <literal>numBuddies</literal> setting of <literal>1</literal>, 
+      each node will have 200 sessions in memory.</para>
+      </section>
+      
+      </section>
+      
+      <section id="clustering-http-state-cacheconfig">
+        
+        <title>Configuring the JBoss Cache instance used for session state replication</title>
+        <para>The container for a distributable web application makes use of JBoss Cache to
+      provide HTTP session replication services around the cluster. The container 
+      integrates with the CacheManager service to obtain a reference to a JBoss Cache instance
+      (see <xref linkend="clustering-blocks-jbc-cachemanager"/>).</para>
+      
+      <para>The name of the JBoss Cache configuration to use is controlled by the 
+      <literal>cacheName</literal> element in the application's 
+      <literal>jboss-web.xml</literal> (see <xref linkend="clustering-http-app"/>). 
+      In most cases, though, this does not need to be set as the default values of
+      <literal>standard-session-cache</literal> and 
+      <literal>field-granularity-session-cache</literal> (for applications 
+      configured for FIELD granularity) are appropriate.</para>
+      
+      <para>The JBoss Cache configurations in the CacheManager service expose
+      are large number of options. See <xref linkend="jbosscache.chapt"/> and
+      the JBoss Cache documentation for a more complete discussion. However,
+      the <literal>standard-session-cache</literal> and 
+      <literal>field-granularity-session-cache</literal> configurations are 
+      already optimized for the web session replication use case, and most of the 
+      settings should not be altered. However, there are a few items
+      that an JBoss AS administrator may wish to change:</para>
+      
+      <itemizedlist>
+      <listitem>
+      <para><emphasis role="bold">cacheMode</emphasis></para>
+      <para>By default, <literal>REPL_ASYNC</literal>, meaning a web request thread
+      sending a session replication message to the cluster does not wait for 
+      responses from other cluster nodes confirming they have received and
+      processed the message. Alternative <literal>REPL_SYNC</literal> offers
+      greater guarantees that the session state was received, but at a significant
+      performance cost. See <xref linkend="jbosscache-configuration-cachemode"/>.</para>
+      </listitem>
+      
+      <listitem>
+      <para><emphasis role="bold">enabled</emphasis> property in the <emphasis role="bold">buddyReplicationConfig</emphasis> section</para>
+      <para>Set to <literal>true</literal> to enable buddy replication. See <xref linkend="jbosscache-configuration-buddyrepl"/>.
+      Default is <literal>false</literal>.</para>
+      </listitem>
+      
+      <listitem>
+      <para><emphasis role="bold">numBuddies</emphasis> property in the <emphasis role="bold">buddyReplicationConfig</emphasis> section</para>
+      <para>Set to a value greater than the default <literal>1</literal> to increase the number of backup nodes onto
+      which sessions are replicated. Only relevant if buddy replication is enabled. See <xref linkend="jbosscache-configuration-buddyrepl"/>.</para>
+      </listitem>
+      
+      <listitem>
+      <para><emphasis role="bold">buddyPoolName</emphasis> property in the <emphasis role="bold">buddyReplicationConfig</emphasis> section</para>
+      <para>A way to specify a preferred replication group when buddy replication is enabled.  
+      JBoss Cache tries to pick a buddy who shares the same pool name (falling back to other 
+      buddies if not available). Only relevant if buddy replication is enabled. See <xref linkend="jbosscache-configuration-buddyrepl"/>.</para>
+      </listitem>
+      
+      <listitem>
+      <para><emphasis role="bold">multiplexerStack</emphasis></para>
+      <para>Name of the JGroups protocol stack the cache should use. See <xref linkend="clustering-blocks-jgroups-channelfactory"/>.</para>
+      </listitem>
+      
+      <listitem>
+      <para><emphasis role="bold">clusterName</emphasis></para>
+      <para>Identifying name JGroups will use for this cache's channel. Only 
+      change this if you create a new cache configuration, in which case this 
+      property should have a different value from all other cache configurations.</para>
+      </listitem>
+      
+      </itemizedlist>
+      
+      <para>If you wish to use a completely new JBoss Cache configuration rather
+      than editing one of the existing ones, please see <xref linkend="jbosscache-custom-deployment-cachemgr"/>.</para>
+      </section>
+      
+  </section>
+      
+      <section id="clustering-http-field">
+        <title>Using FIELD level replication</title>
+	<para>FIELD-level replication only replicates modified data fields inside objects stored in the session. Its use could potentially drastically reduce the data traffic between clustered nodes, and hence improve the performance of the whole cluster. To use FIELD-level replication, you have to first prepare (i.e., bytecode enhance) your Java class to allow the session cache to detect when fields in cached objects have been changed and need  to be replicated.     
+	</para>
+	<para>
+		The first step in doing this is to identify the classes that need to be prepared.  This is done via annotations. For example:
+	</para>
+	
+<programlisting><![CDATA[@org.jboss.cache.pojo.annotation.Replicable
+public class Address 
+{
+...
+}]]></programlisting>
+	
+<para>
+If you annotate a class with @Replicable, then all of its subclasses will be automatically annotated as well. Similarly, you can annotate an interface with @Replicable and all of its implementing classes will be annotated. For example:
+</para>
+<programlisting><![CDATA[@org.jboss.cache.pojo.annotation.Replicable
+public class Person 
+{
+...
+}
+
+public class Student extends Person
+{
+...
+}]]></programlisting>
+	
+<para>There is no need to annotate <literal>Student</literal>. POJO Cache will recognize it as @Replicable because it is a sub-class of <literal>Person</literal>.</para>
+<para>JBoss AS 5 requires JDK 5 at runtime, but some users may still need to build their projects using JDK 1.4.  In this case, annotating classes can be  done via JDK 1.4 style annotations embedded in JavaDocs. For example:
+</para>
+
+
+<programlisting>/**
+ * Represents a street address.
+ *
+ * @@org.jboss.cache.pojo.annotation.Replicable
+ */
+public class Address 
+{
+...
+}</programlisting>
+
+<para>
+	Once you have annotated your classes, you will need to perform a pre-processing step to bytecode enhance your classes for use by POJO Cache. You need to use the JBoss AOP pre-compiler <literal>annotationc</literal> and post-compiler <literal>aopc</literal> to process the above source code before and after they are compiled by the Java compiler. The <literal>annotationc</literal> step is only need if the JDK 1.4 style annotations are used; if JDK 5 annotations are used it is not necessary. Here is an example of how to invoke those commands from command line.
+</para>
+
+        <programlisting>$ annotationc [classpath] [source files or directories]
+$ javac -cp [classpath] [source files or directories]
+$ aopc [classpath] [class files or directories]</programlisting>
+	    
+<para>
+	Please see the JBoss AOP documentation for the usage of the pre- and post-compiler. The JBoss AOP project also provides easy to use ANT tasks to help integrate those steps into your application build process. 
+</para>
+<!-- 
+        <note>
+		<para>
+			You can see a complete example on how to build, deploy, and validate a FIELD-level replicated web application from this page: <ulink url="http://www.jboss.org/community/wiki/httpsessionfieldlevelexample"/>. The example bundles the pre- and post-compile tools so you do not need to download JBoss AOP separately.
+		</para>
+        </note>
+-->
+        <para>Finally, let's see an example on how to use FIELD-level replication on those data classes. First, we see some servlet code that reads some data from the request parameters, creates a couple of objects and stores them in the session:</para>
+        <programlisting>Person husband = new Person(getHusbandName(request), getHusbandAge(request));
+Person wife = new Person(getWifeName(request), getWifeAge(request));
+Address addr = new Address();
+addr.setPostalCode(getPostalCode(request));
+
+husband.setAddress(addr);
+wife.setAddress(addr); // husband and wife share the same address!
+
+session.setAttribute("husband", husband); // that's it.
+session.setAttribute("wife", wife); // that's it.</programlisting>
+        
+        <para>Later, a different servlet could update the family's postal code:</para>
+        <programlisting>Person wife = (Person)session.getAttribute("wife");
+// this will update and replicate the postal code
+wife.getAddress().setPostalCode(getPostalCode(request)); </programlisting>
+            
+        <para>Notice that in there is no need to call <literal>session.setAttribute()</literal> after you make changes to
+         the data object, and all changes to the fields are automatically replicated across the cluster.</para>
+        <para>Besides plain objects, you can also use regular Java collections of those objects as session
+                    attributes. POJO Cache automatically figures out how to handle those collections and replicate
+                    field changes in their member objects.</para>
+                    
+      </section>
+      
+            
+      <section id="clustering-http-sso">
+        <title>Using Clustered Single Sign On</title>
+	
+	<para>JBoss supports clustered single sign-on, allowing a user to authenticate 
+	to one web application and to be recognized on all web 
+	applications that are deployed on the same virtual host, whether or not they
+	are deployed on that same machine or on another node in the cluster. 
+	Authentication replication is handled by JBoss Cache. Clustered single sign-on 
+	support is a JBoss-specific extension of the non-clustered 
+	<literal>org.apache.catalina.authenticator.SingleSignOn</literal>
+	valve that is a standard part of Tomcat and JBoss Web. Both the non-clustered
+	and clustered versions allow users to sign on to any one of the web apps 
+	associated with a virtual host and have their identity recognized by all 
+	other web apps on the same virtual host. The clustered version brings the
+	added benefits of enabling SSO failover and allowing a load balancer to direct 
+	requests for different webapps to different servers, while maintaining the SSO.
+	</para>
+	
+	<section id="clustering-sso-configuration">
+	   <title>Configuration</title>
+	<para>
+		To enable clustered single sign-on, you must add the <literal>ClusteredSingleSignOn</literal> 
+		valve to the appropriate <literal>Host</literal> elements of the 
+		<literal>JBOSS_HOME/server/all/deploy/jbossweb.sar/server.xml</literal> file. 
+		The valve element is already included in the standard file; you just need
+		to uncomment it. The valve configuration is shown here: 
+	</para>
+   <programlisting>&lt;Valve className="org.jboss.web.tomcat.service.sso.ClusteredSingleSignOn" /&gt;</programlisting>
+   
+   <para>The element supports the following attributes:</para>
+   
+   <itemizedlist>
+      <listitem>
+        <para><emphasis role="bold">className</emphasis> is a required attribute 
+        to set the Java class name of the valve implementation to use.  This must 
+        be set to <literal>org.jboss.web.tomcat.service.sso.ClusteredSingleSign</literal>.</para>
+      </listitem>
+      <listitem>
+         <para><emphasis role="bold">cacheConfig</emphasis> is the name of the 
+         cache configuration (see <xref linkend="clustering-blocks-jbc-cachemanager"/>) to use 
+         for the clustered SSO cache. Default is <literal>clustered-sso</literal>.</para>
+      </listitem>
+      <listitem>
+         <para><emphasis role="bold">treeCacheName</emphasis> is deprecated; use <literal>cacheConfig</literal>.
+         Specifies a JMX ObjectName of the JBoss Cache MBean to use 
+         for the clustered SSO cache. If no cache can be located from the 
+         CacheManager service using the value of <literal>cacheConfig</literal>, 
+         an attempt to locate an mbean registered in JMX under this ObjectName 
+         will be made. Default value is <literal>jboss.cache:service=TomcatClusteringCache</literal>.</para>
+      </listitem>
+      <listitem>
+         <para><emphasis role="bold">cookieDomain</emphasis> is used to set the host domain 
+         to be used for sso cookies. See <xref linkend="clustering-sso-cookie-domain"/> for more.
+         Default is <literal>"/"</literal>.</para>
+      </listitem>
+      <listitem>
+         <para><emphasis role="bold">maxEmptyLife</emphasis> is the maximum number of seconds 
+         an SSO with no active sessions will be usable by a request. The clustered 
+         SSO valve tracks what cluster nodes are managing sessions related to an 
+         SSO. A positive value for this attribute allows proper handling of 
+         shutdown of a node that is the only one that had handled any of the sessions 
+         associated with an SSO. The shutdown invalidates the local copy of the 
+         sessions, eliminating all sessions from the SSO. If maxEmptyLife were 
+         zero, the SSO would terminate along with the local session copies. 
+         But, backup copies of the sessions (if they are from clustered 
+         webapps) are available on other cluster nodes. Allowing the SSO to live 
+         beyond the life of its managed sessions gives the user time to make 
+         another request which can fail over to a different cluster node, where 
+         it activates the the backup copy of the session. Default is 
+         <literal>1800</literal>, i.e. 30 minutes.</para>
+      </listitem>
+      <listitem>
+         <para><emphasis role="bold">processExpiresInterval</emphasis> is the minimum number 
+         of seconds between efforts by the valve to find and invalidate SSO's 
+         that have exceeded their 'maxEmptyLife'. Does not imply effort will be 
+         spent on such cleanup every 'processExpiresInterval', just that it 
+         won't occur more frequently than that. Default is <literal>60</literal>.</para>
+      </listitem>
+      <listitem>
+         <para><emphasis role="bold">requireReauthentication</emphasis> is a flag to determine 
+         whether each request needs to be reauthenticated to the security <emphasis>Realm</emphasis>. 
+         If "true", this Valve uses cached security credentials (username and password) 
+         to reauthenticate to the JBoss Web security <emphasis>Realm</emphasis>
+         each request associated with an SSO session. If <literal>false</literal>, 
+         the valve can itself authenticate requests based on the presence of a 
+         valid SSO cookie, without rechecking with the <emphasis>Realm</emphasis>.
+         Setting to <literal>true</literal> can allow web applications with 
+         different <literal>security-domain</literal> configurations to share an 
+         SSO. Default is <literal>false</literal>.</para>
+      </listitem>
+   </itemizedlist>
+   
+      </section>
+      
+      <section id="clustering-sso-behavior">
+        <title>SSO Behavior</title>
+        <para>The user will not be challenged as long as he accesses only 
+        unprotected resources in any of the web applications on the virtual host.</para>
+        
+        <para>Upon access to a protected resource in any web app, the user will 
+        be challenged to authenticate, using the login method defined for the web app.</para>
+        
+        <para>Once authenticated, the roles associated with this user will be 
+        utilized for access control decisions across all of the associated web 
+        applications, without challenging the user to authenticate themselves to 
+        each application individually.</para>
+        
+        <para>If the web application invalidates a session (by invoking the 
+        <literal>javax.servlet.http.HttpSession.invalidate()</literal> method), 
+        the user's sessions in all web applications will be invalidated.</para>
+        
+        <para>A session timeout does not invalidate the SSO if other sessions 
+        are still valid.</para>        
+      </section>
+      
+      <section id="clustering-sso-limitations">
+         <title>Limitations</title>
+         <para>There are a number of known limitations to this Tomcat valve-based 
+         SSO implementation:
+         
+         <itemizedlist>
+         <listitem><para>Only useful within a cluster of JBoss servers; 
+         SSO does not propagate to other resources.</para></listitem>
+         <listitem><para>Requires use of container managed authentication 
+         (via <literal>&lt;login-config&gt;</literal> element in <literal>web.xml</literal>)</para></listitem>
+         <listitem><para>Requires cookies.  SSO is maintained via a cookie and URL rewriting is not supported.</para></listitem>
+         <listitem><para>Unless <literal>requireReauthentication</literal> is set 
+         to <literal>true</literal>, all web applications configured for the same 
+         SSO valve must share the same JBoss Web <literal>Realm</literal> and 
+         JBoss Security <literal>security-domain</literal>. This means:
+         <itemizedlist>
+         <listitem><para>In <literal>server.xml</literal> you can nest the 
+         <literal>Realm</literal> element inside the <literal>Host</literal> 
+         element (or the surrounding <literal>Engine</literal> element), but not 
+         inside a <literal>context.xml</literal> packaged with one of the involved web applications.</para></listitem>
+         <listitem><para>The <literal>security-domain</literal> configured in 
+         <literal>jboss-web.xml</literal> or <literal>jboss-app.xml</literal> 
+         must be consistent for all of the web applications.</para></listitem>
+         <listitem><para>Even if you set <literal>requireReauthentication</literal> 
+         to <literal>true</literal> and use a different <literal>security-domain</literal>
+         (or, less likely, a different <literal>Realm</literal>) for different webapps, 
+         the varying security integrations must all accept the same credentials 
+         (e.g. username and password).</para></listitem>
+         </itemizedlist>
+         </para>
+         </listitem>
+         </itemizedlist>
+         </para>
+      </section>
+      
+      <section id="clustering-sso-cookie-domain">
+         <title>Configuring the Cookie Domain</title>
+         <para>As noted above the SSO valve supports a <literal>cookieDomain</literal>
+         configuration attribute.  This attribute allows configuration of the SSO cookie's domain 
+         (i.e. the set of hosts to which the browser will present the cookie).  
+         By default the domain is <literal>"/"</literal>, meaning the browser 
+         will only present the cookie to the host that issued it.  The 
+         <literal>cookieDomain</literal> attribute allows the cookie to be 
+         scoped to a wider domain.</para>
+         
+         <para>For example, suppose we have a case where two apps, with URLs 
+         <literal>http://app1.xyz.com</literal> and <literal>http://app2.xyz.com</literal>, 
+         that wish to share an SSO context. These apps could be running on different 
+         servers in a cluster or the virtual host with which they are associated 
+         could have multiple aliases. This can be supported with the following configuration:
+         
+         <programlisting>&lt;Valve className="org.jboss.web.tomcat.service.sso.ClusteredSingleSignOn"
+                 cookieDomain="xyz.com" /&gt;</programlisting>
+         </para>
+      </section>
+      </section>
+      
+     
+    </chapter>
+    

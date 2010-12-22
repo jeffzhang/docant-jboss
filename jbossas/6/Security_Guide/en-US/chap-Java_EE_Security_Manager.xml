@@ -1,0 +1,262 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd">
+<chapter id="chap-Java_EE_Security_Manager">
+  <title>Java Security Manager</title>
+  <para>To restrict code privileges  using Java permissions, you must configure the JBoss server to run under a security manager. This is done by configuring the Java VM options in the <filename>run.conf</filename>  in the JBoss server distribution bin directory. The two required VM options are as follows:
+  </para>
+  <variablelist>
+    <varlistentry>
+      <term>java.security.manager</term>
+      <listitem>
+        <para>Used without any value to specify that the default security manager should be used. This is the preferred security manager. You can also pass a value to the <literal>java.security.manager</literal> option to specify a custom security manager implementation. The value must be the fully qualified class name of a subclass of <literal>java.lang.SecurityManager</literal>. This form specifies that the policy file should augment the default security policy as configured by the VM installation.
+    </para>
+      </listitem>
+    </varlistentry>
+    <varlistentry>
+      <term>java.security.policy</term>
+      <listitem>
+        <para>Used to specify the policy file that will augment the default security policy information for the VM. This option takes two forms: <literal>java.security.policy=policyFileURL</literal> and <literal>java.security.policy==policyFileURL</literal>. The first form specifies that the policy file should augment the default security policy as configured by the VM installation. The second form specifies that only the indicated policy file should be used. The <literal>policyFileURL</literal> value can be any URL for which a protocol handler exists, or a file path specification.
+    </para>
+      </listitem>
+    </varlistentry>
+  </variablelist>
+  <para>Both the <literal>run.bat</literal> and <literal>run.sh</literal> start scripts reference a <varname>JAVA_OPTS</varname> variable specified in <filename>run.conf</filename> (Linux) or <filename>run.conf.bat</filename> (Windows) that sets the required security manager properties.
+  </para>
+  <para>The next element of Java security is establishing the allowed permissions. If you look at the <filename>$JBOSS_HOME/bin/server.policy.cert</filename> file that is contained in the default configuration file set you will notice it contains the following grant statement:
+  </para>
+  <programlisting language="Java" role="JAVA">grant signedBy &quot;jboss&quot; { 
+   permission java.security.AllPermission; 
+}; 
+</programlisting>
+  <para>This statement declares that all code signed by JBoss is trusted.
+  To import the public key to your keystore, follow <xref linkend="proc-Activate_Java_Security_Manager"/></para>
+  <important>
+    <para>Carefully consider what permissions you grant.  Be particularly cautious about granting <option>java.security.AllPermission</option>: you can potentially allow changes to the system binary, including the JVM runtime environment.</para>
+  </important>
+  <para>The current set of JBoss specific <literal>java.lang.RuntimePermissions</literal> are described below.</para>
+  <variablelist>
+    <varlistentry>
+      <term>
+        <classname> org.jboss.security.SecurityAssociation.getPrincipalInfo</classname>
+      </term>
+      <listitem>
+        <para>Provides access to the <methodname>org.jboss.security.SecurityAssociation getPrincipal() </methodname>and <methodname>getCredential()</methodname> methods. The risk involved with using this runtime permission is the ability to see the current thread caller and credentials. </para>
+      </listitem>
+    </varlistentry>
+    <varlistentry>
+      <term>
+        <classname>org.jboss.security.SecurityAssociation.getSubject</classname>
+      </term>
+      <listitem>
+        <para>Provides access to the <methodname>org.jboss.security.SecurityAssociation getSubject()</methodname> method. </para>
+      </listitem>
+    </varlistentry>
+    <varlistentry>
+      <term>
+        <classname>org.jboss.security.SecurityAssociation.setPrincipalInfo</classname>
+      </term>
+      <listitem>
+        <para>Provides access to the <methodname>org.jboss.security.SecurityAssociation setPrincipal()</methodname>, <methodname>setCredential()</methodname>, <methodname>setSubject()</methodname>, <methodname>pushSubjectContext()</methodname>, and <methodname>popSubjectContext()</methodname> methods. The risk involved with using this runtime permission is the ability to set the current thread caller and credentials. </para>
+      </listitem>
+    </varlistentry>
+    <varlistentry>
+      <term>
+        <classname> org.jboss.security.SecurityAssociation.setServer</classname>
+      </term>
+      <listitem>
+        <para>Provides access to the <methodname>org.jboss.security.SecurityAssociation setServer </methodname>method. The risk involved with using this runtime permission is the ability to enable or disable multithread storage of the caller principal and credential.</para>
+      </listitem>
+    </varlistentry>
+    <varlistentry>
+      <term>
+        <classname> org.jboss.security.SecurityAssociation.setRunAsRole</classname>
+      </term>
+      <listitem>
+        <para>Provides access to the <methodname>org.jboss.security.SecurityAssociation pushRunAsRole</methodname> and <methodname>popRunAsRole</methodname>, <methodname>pushRunAsIdentity</methodname> and <methodname>popRunAsIdentity</methodname> methods. The risk involved with using this runtime permission is the ability to change the current caller run-as role principal. </para>
+      </listitem>
+    </varlistentry>
+    <varlistentry>
+      <term>
+        <classname>org.jboss.security.SecurityAssociation.accessContextInfo</classname>
+      </term>
+      <listitem>
+        <para>Provides access to the <methodname>org.jboss.security.SecurityAssociation accessContextInfo, &quot;Get&quot;</methodname> and <methodname>accessContextInfo, &quot;Set&quot;</methodname> methods, allowing you to both set and get the current security context info.</para>
+      </listitem>
+    </varlistentry>
+    <varlistentry>
+      <term>
+        <classname>org.jboss.naming.JndiPermission</classname>
+      </term>
+      <listitem>
+        <para>Provides special permissions to files and directories in a specified JNDI tree path, or recursively to all files and subdirectories. A JndiPermission consists of a pathname and a set of valid permissions related to the file or directory.  </para>
+        <para>The available permissions include: <option>bind</option>, <option>rebind</option>, <option>unbind</option>, <option>lookup</option>, <option>list</option>, <option>listBindings</option>, <option>createSubcontext</option>, and  <option>all</option>. </para>
+        <para>Pathnames ending in <literal>/*</literal> indicate the specified permissions apply to all files and directories of the pathname.  Pathnames ending in <literal>/-</literal> indicate recursive permissions to all files and subdirectories of the pathname.  Pathnames consisting of the special token <literal>&lt;&lt;ALL BINDINGS&gt;&gt;</literal> matches any file in any directory.</para>
+      </listitem>
+    </varlistentry>
+    <varlistentry>
+      <term>
+        <classname>org.jboss.security.srp.SRPPermission</classname>
+      </term>
+      <listitem>
+        <para>A custom permission class for protecting access to sensitive SRP information like the private session key and private key.
+This permission doesn&apos;t have any actions defined. The <property>getSessionKey</property> target provides access to the private session key resulting from the SRP negotiation. Access to this key will allow you  to encrypt and decrypt messages
+that have been encrypted with the session key.</para>
+      </listitem>
+    </varlistentry>
+    <varlistentry>
+      <term>
+        <classname>org.hibernate.secure.HibernatePermission</classname>
+      </term>
+      <listitem>
+        <para>This permission class provides basic permissions to secure Hibernate sessions.
+The target for this property is the  entity name.
+The available actions include:
+<property>insert</property>, <property>delete</property>, <property>update</property>, <property>read</property>, <property>*</property> (all).</para>
+      </listitem>
+    </varlistentry>
+    <varlistentry>
+      <term>
+        <classname>org.jboss.metadata.spi.stack.MetaDataStackPermission</classname>
+      </term>
+      <listitem>
+        <para>Provides a custom permission class for controlling how callers interact with the metadata stack.  The available permissions are: <option>modify</option> (push/pop onto the stack), <option>peek</option> (peek onto the stack), and <option>*</option> (all).</para>
+      </listitem>
+    </varlistentry>
+    <varlistentry>
+      <term>
+        <classname>org.jboss.config.spi.ConfigurationPermission</classname>
+      </term>
+      <listitem>
+        <para>Secures setting of configuration properties.
+Defines only permission target names, and no actions.
+The targets for this property include:
+<markup>&lt;property name&gt;</markup> - property which code has permission to set;
+<property>*</property> - all properties.</para>
+      </listitem>
+    </varlistentry>
+    <varlistentry>
+      <term>
+        <classname>org.jboss.kernel.KernelPermission</classname>
+      </term>
+      <listitem>
+        <para>Secures access to the kernel configuration.
+Defines only permission target names and no actions.
+The targets for this property include: <property>access</property> - access the kernel configuration;
+<property>configure</property> - configure the kernel (access is implied);  
+<property>*</property> - all of the above.</para>
+      </listitem>
+    </varlistentry>
+    <varlistentry>
+      <term>
+        <classname>org.jboss.kernel.plugins.util.KernelLocatorPermission</classname>
+      </term>
+      <listitem>
+        <para>Secures access to the kernel.
+Defines only permission target names and no actions.
+The targets for this property include:
+<property>kernel</property> - access the kernel;
+<property>*</property> - access all areas.</para>
+      </listitem>
+    </varlistentry>
+  </variablelist>
+  <procedure id="proc-Activate_Java_Security_Manager">
+    <title>Activate Java Security Manager</title>
+    <para>Follow this procedure to correctly configure the JSM for secure, production-ready operation.  This procedure is only required while configuring your server for the first time.  In this procedure, <filename>$JAVA_HOME</filename> refers to the installation directory of the JRE.</para>
+    <step>
+      <title>Import public key to keystore</title>
+      <para>Execute the following command:</para>
+      <formalpara>
+        <title>Linux</title>
+        <para><screen>[home]$ sudo $JAVA_HOME/bin/keytool -import  -alias jboss -file JBossPublicKey.RSA -keystore $JAVA_HOME/jre/lib/security/cacerts</screen></para>
+      </formalpara>
+      <formalpara>
+        <title>Windows</title>
+        <para><screen>C:\&gt; %JAVA_HOME%\bin\keytool -import  -alias jboss -file JBossPublicKey.RSA -keystore %JAVA_HOME%\jre\lib\security\cacerts </screen></para>
+      </formalpara>
+    </step>
+    <step>
+      <title>Verify key signature</title>
+      <para>Execute the following command in the terminal.</para>
+      <note>
+        <para>The default JVM Keystore password is <literal>changeit</literal>.  </para>
+      </note>
+      <screen>$ keytool -list -keystore $JAVA_HOME/jre/lib/security/cacerts
+Enter keystore password:  
+
+Keystore type: JKS
+Keystore provider: SUN
+
+Your keystore contains 2 entries
+
+jboss, Aug 12, 2009, trustedCertEntry,
+Certificate fingerprint (MD5): 93:F2:F1:8B:EF:8A:E0:E3:D0:E7:69:BC:69:96:29:C1
+jbosscodesign2009, Aug 12, 2009, trustedCertEntry,
+Certificate fingerprint (MD5): 93:F2:F1:8B:EF:8A:E0:E3:D0:E7:69:BC:69:96:29:C1</screen>
+    </step>
+    <step>
+      <title>Specify additional JAVA_OPTS</title>
+      <formalpara>
+        <title>Linux</title>
+        <para>Ensure the following block is present in the <filename>$JBOSS_HOME/server/$PROFILE/run.conf</filename> file.</para>
+      </formalpara>
+      <programlisting>## Specify the Security Manager options
+JAVA_OPTS=&quot;$JAVA_OPTS -Djava.security.manager -Djava.security.policy==$DIRNAME/server.policy.cert 
+-Djava.protocol.handler.pkgs=org.jboss.handlers.stub 
+-Djava.security.debug=access:failure 
+-Djboss.home.dir=$DIRNAME/../ 
+-Djboss.server.home.dir=$DIRNAME/../server/default/&quot;</programlisting>
+      <note>
+        <para>Placing  <filename>run.conf</filename> into the target profile directory will mean the file overrides any other <filename>run.conf</filename> files outside server profiles.</para>
+      </note>
+      <formalpara>
+        <title>Windows</title>
+        <para>Ensure the following block is present in the <filename>$JBOSS_HOME\bin\run.conf.bat</filename> file.</para>
+      </formalpara>
+      <programlisting>rem # Specify the Security Manager options
+set &quot;JAVA_OPTS=%JAVA_OPTS% -Djava.security.manager
+-Djava.security.policy==%DIRNAME%\server.policy.cert 
+-Djava.protocol.handler.pkgs=org.jboss.handlers.stub 
+-Djava.security.debug=access:failure 
+-Djboss.home.dir=%DIRNAME%/../ 
+-Djboss.server.home.dir=%DIRNAME%/../server/default/&quot;</programlisting>
+    </step>
+    <step>
+      <title>Start the server</title>
+      <para>Start JBoss using the <filename>run.sh</filename> or <filename>run.bat</filename> (Windows) script.</para>
+    </step>
+  </procedure>
+  <para>A number of Java debugging flags are available  to assist you in determining  how the security manager is using your security policy file, and  what policy files are contributing permissions. Running the VM as follows shows the possible debugging flag settings:
+  </para>
+  <screen>[bin]$ java -Djava.security.debug=help
+
+all            turn on all debugging
+access         print all checkPermission results
+combiner       SubjectDomainCombiner debugging
+configfile     JAAS ConfigFile loading
+configparser   JAAS ConfigFile parsing
+gssloginconfig GSS LoginConfigImpl debugging
+jar            jar verification
+logincontext   login context results
+policy         loading and granting
+provider       security provider debugging
+scl            permissions SecureClassLoader assigns
+
+The following can be used with access:
+
+stack         include stack trace
+domain        dump all domains in context
+failure       before throwing exception, dump stack
+              and domain that didn&apos;t have permission
+
+The following can be used with stack and domain:
+
+permission=&lt;classname&gt;
+              only dump output if specified permission
+              is being checked
+codebase=&lt;URL&gt;
+              only dump output if specified codebase
+              is being checked
+</screen>
+  <para>Running with  <literal>-Djava.security.debug=all</literal> provides the most output, but the output volume is  acutely  verbose. This might be a good place to start if you don&apos;t understand a given security failure at all. For less verbose output that will still assist with debugging  permission failures, use <literal>-Djava.security.debug=access,failure</literal>.
+  </para>
+</chapter>

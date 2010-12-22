@@ -1,0 +1,734 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.3//EN" "http://www.oasis-open.org/docbook/xml/4.3/docbookx.dtd">
+
+<chapter id="clustering-jndi">
+      <title>Clustered JNDI Services</title>
+      <para>
+	      JNDI is one of the most important services provided by the application 
+	      server. The JBoss HA-JNDI (High Availability JNDI) service brings the 
+	      following features to JNDI:</para>
+	      <itemizedlist>
+		      <listitem>
+				<para>
+	      	 Transparent failover of naming operations. If an HA-JNDI naming 
+	      	 Context is connected to the HA-JNDI service on a particular JBoss AS 
+	      	 instance, and that service fails or is shut down, the HA-JNDI client 
+	      	 can transparently fail over to another AS instance.
+				</para>
+			</listitem>
+			<listitem>
+				<para>
+	      	Load balancing of naming operations. An HA-JNDI naming Context will 
+	      	automatically load balance its requests across all the HA-JNDI 
+	      	servers in the cluster.
+			   </para>
+		</listitem>
+		<listitem>
+				<para>
+				Automatic client discovery of HA-JNDI servers (using multicast).
+			</para>
+		</listitem>
+		<listitem>
+			<para>
+	      Unified view of JNDI trees cluster-wide.  A client can connect to the 
+	      HA-JNDI service running on any node in the cluster and find objects bound 
+	      in JNDI on any other node.  This is accomplished via two mechanisms:
+			<itemizedlist>
+				<listitem>
+					<para>Cross-cluster lookups. A client can perform a lookup and the 
+					server side HA-JNDI service has the ability to find things bound 
+					in regular JNDI on any node in the cluster.
+					</para>
+				</listitem>
+				<listitem>
+					<para>A replicated cluster-wide context tree. An object bound into 
+					the HA-JNDI service will be replicated around the cluster, and a 
+					copy of that object will be available in-VM on each node in the cluster.
+					</para>
+				</listitem>
+			</itemizedlist>
+            </para>
+      </listitem>
+	
+</itemizedlist>		
+
+	      
+	<para>
+		JNDI is a key component for many other interceptor-based clustering services: 
+		those services register themselves with JNDI so the client can look up their 
+		proxies and make use of their services. HA-JNDI completes the picture by 
+		ensuring that clients have a highly-available means to look up those proxies. 
+		However, it is important to understand that using HA-JNDI (or not) has no 
+		effect whatsoever on the clustering behavior of the objects that are 
+		looked up. To illustrate:
+	</para>
+	      <itemizedlist>
+		      <listitem>
+			      <para>
+				      If an EJB is not configured as clustered, looking up the EJB 
+				      via HA-JNDI does not somehow result in the addition of clustering 
+				      capabilities (load balancing of EJB calls, transparent failover, 
+				      state replication) to the EJB.
+			      </para>
+		      </listitem>
+		      <listitem>
+			      <para>
+				      If an EJB is configured as clustered, looking up the EJB via 
+				      regular JNDI instead of HA-JNDI does not somehow result in the 
+				      removal of the bean proxy's clustering capabilities.
+			      </para>
+		      </listitem>
+	      </itemizedlist>
+	      
+	      
+
+	
+      <section id="clustering-jndi-how">
+        <title>How it works</title>
+        <para>
+		The JBoss client-side HA-JNDI naming Context is based on the client-side 
+		interceptor architecture (see <xref linkend="clustering-concepts-arch-proxy"/>). 
+		The client  obtains an HA-JNDI proxy object (via the <literal>InitialContext</literal> 
+		object) and invokes JNDI lookup services on the remote server through the proxy.  
+		The client specifies that it wants an HA-JNDI proxy by configuring the 
+		naming properties used by the <literal>InitialContext</literal> object.  
+		This is covered in detail in <xref linkend="clustering-jndi-client"/>.  
+		Other than the need to ensure the appropriate naming properties are provided 
+		to the <literal>InitialContext</literal>, the fact that the  naming 
+		Context is using HA-JNDI is completely transparent to the client.
+	</para>
+	<para>
+		On the server side, the HA-JNDI service maintains a cluster-wide context 
+		tree. The cluster wide tree is always available as long as there is one 
+		node left in the cluster. Each node in the cluster also maintains its own 
+		local JNDI context tree.  The HA-JNDI service on each node is able to find 
+		objects bound into the local JNDI context tree, and is also able to make
+		a cluster-wide RPC to find objects bound in the local tree on any other
+		node.  An application can bind its objects to either tree, although in 
+		practice most objects are bound into the local JNDI context tree. The design 
+		rationale for this architecture is as follows:
+	</para>
+        <itemizedlist>
+          <listitem>
+		  <para>
+			  It avoids migration issues with applications that assume that their 
+			  JNDI implementation is local. This allows clustering to work out-of-the-box 
+			  with just a few tweaks of configuration files.
+		  </para>
+          </listitem>          
+          <listitem>
+		  <para>
+			  In a homogeneous cluster, this configuration actually cuts down on 
+			  the amount of network traffic. A homogenous cluster is one where the 
+			  same types of objects are bound under the same names on each node.
+		  </para>
+          </listitem>
+          <listitem>
+            	<para>
+		    Designing it in this way makes the HA-JNDI service an optional service 
+		    since all underlying cluster code uses a straight new <literal>InitialContext</literal> 
+		    to lookup or create bindings.
+	    	</para>
+          </listitem>
+        </itemizedlist>
+	
+        <para>
+		On the server side, a naming Context obtained via a call 
+		to <literal>new InitialContext()</literal>  will be bound to the local-only, 
+		non-cluster-wide JNDI Context. So, all EJB homes and such will not be bound 
+		to the cluster-wide JNDI Context, but rather, each home will be bound into 
+		the local JNDI. 
+	</para>
+	<para>
+		When a remote client does a lookup through HA-JNDI, HA-JNDI will delegate 
+		to the local JNDI service when it cannot find the object within the global 
+		cluster-wide Context. The detailed lookup rule is as follows.
+	</para>
+        <itemizedlist>
+          <listitem>
+		  <para>If the binding is available in the cluster-wide JNDI tree, return it.</para>
+          </listitem>
+          <listitem>
+		  <para>If the binding is not in the cluster-wide tree, delegate the lookup 
+		  query to the local JNDI service and return the received answer if available.</para>
+          </listitem>
+          <listitem>
+            <para>If not available, the HA-JNDI service asks all other nodes in 
+            the cluster if their local JNDI service owns such a binding and 
+            returns the answer from the set it receives.</para>
+          </listitem>
+          <listitem>
+            <para>If no local JNDI service owns such a binding, a 
+            <literal>NameNotFoundException</literal> is finally raised.</para>
+          </listitem>
+        </itemizedlist>
+	
+	<para>
+		In practice, objects are rarely bound in the cluster-wide JNDI tree; 
+		rather they are bound in the local JNDI tree.  For example, when EJBs are 
+		deployed, their proxies are always bound in local JNDI, not HA-JNDI. 
+		So, an EJB home lookup done through HA-JNDI will always be delegated to 
+		the local JNDI instance.
+	</para>
+        
+	<note><title>Note</title>
+		<para>
+			If different beans (even of the same type, but participating in 
+			different clusters) use the same JNDI name, this means that each JNDI 
+			server will have a logically different "target" bound under the same
+			name. (JNDI on node 1 will have a binding for bean A and JNDI on node 
+			2 will have a binding, under the same name, for bean B). Consequently, 
+			if a client performs a HA-JNDI query for this name, the query will be 
+			invoked on any JNDI server of the cluster and will return the locally 
+			bound stub. Nevertheless, it may not be the correct stub that the client 
+			is expecting to receive! So, it is always best practice to ensure that 
+			across the cluster different names are used for logically different bindings.
+		</para>
+	</note>
+   
+   <note><title>Note</title>
+      <para>
+         If a binding is only made available on a few nodes in the cluster (for 
+         example because a bean is only deployed on a small subset of nodes in 
+         the cluster), the probability is higher that a lookup will hit a 
+         HA-JNDI server that does not own this binding and thus the lookup will need 
+         to be forwarded to all nodes in the cluster. Consequently, the query 
+         time will be longer than if the binding would have been available locally. 
+         Moral of the story: as much as possible, cache the result of your JNDI 
+         queries in your client.
+      </para>
+   </note>	
+	
+	<note><title>Note</title>
+		<para>
+			You cannot currently use a non-JNP JNDI implementation (i.e. LDAP) for 
+			your local JNDI implementation if you want to use HA-JNDI. However, you 
+			can use JNDI federation using the <literal>ExternalContext</literal> 
+			MBean to bind non-JBoss JNDI trees into the JBoss JNDI namespace. 
+			Furthermore, nothing prevents you using one centralized JNDI server 
+			for your whole cluster and scrapping HA-JNDI and JNP.
+		</para>
+	</note>
+
+      </section>
+      
+      
+      <section id="clustering-jndi-client">
+        <title>Client configuration</title>
+        
+        <para>Configuring a client to use HA-JNDI is a matter of ensuring the
+        correct set of naming environment properties are available when a new
+        <literal>InitialContext</literal> is created. How this is done varies
+        depending on whether the client is running inside JBoss AS itself or
+        is in another VM.</para>
+        
+	
+	<section><title>For clients running inside the application server</title>
+		<para>
+			If you want to access HA-JNDI from inside the application server, you 
+			must explicitly configure your <literal>InitialContext</literal> by 
+			passing in JNDI properties to the constructor. The following code shows 
+			how to create a naming Context bound to HA-JNDI:
+		</para>
+<programlisting role="JAVA">Properties p = new Properties();  
+p.put(Context.INITIAL_CONTEXT_FACTORY, "org.jnp.interfaces.NamingContextFactory");  
+p.put(Context.URL_PKG_PREFIXES, "jboss.naming:org.jnp.interfaces");
+// HA-JNDI is listening on the address passed to JBoss via -b  
+String bindAddress = System.getProperty("jboss.bind.address", "localhost");
+p.put(Context.PROVIDER_URL, bindAddress + ":1100"); // HA-JNDI address and port.  
+return new InitialContext(p);</programlisting>
+<para>		
+The Context.PROVIDER_URL property points to the HA-JNDI service configured in the 
+<literal>deploy/cluster/hajndi-jboss-beans.xml</literal> file (see <xref linkend="clustering-jndi-jboss"/>).
+By default this service listens on the interface named via the 
+<literal>jboss.bind.address</literal> system property, which itself is set to
+whatever value you assign to the <literal>-b</literal> command line option when
+you start JBoss AS (or <literal>localhost</literal> if not specified). The above 
+code shows an example of accessing this property.
+</para>
+
+<para>
+	However, this does not work in all cases, especially when running several
+	JBoss AS instances on the same machine and bound to the same IP address, but 
+	configured to use different ports. A safer method is to not specify the 
+	Context.PROVIDER_URL but instead allow the <literal>InitialContext</literal>
+	to statically find the in-VM HA-JNDI by specifying the <literal>jnp.partitionName</literal>
+	property:
+</para>
+<programlisting role="JAVA">Properties p = new Properties();
+p.put(Context.INITIAL_CONTEXT_FACTORY, "org.jnp.interfaces.NamingContextFactory");
+p.put(Context.URL_PKG_PREFIXES, "jboss.naming:org.jnp.interfaces");
+// HA-JNDI is registered under the partition name passed to JBoss via -g  
+String partitionName = System.getProperty("jboss.partition.name", "DefaultPartition");
+p.put("jnp.partitionName", partitionName);
+return new InitialContext(p);</programlisting>
+
+<para>This example uses the <literal>jboss.partition.name</literal> system
+property to identify the partition with which the HA-JNDI service works. This
+system property is set to whatever value you assign to the <literal>-g</literal> 
+command line option when you start JBoss AS (or <literal>DefaultPartition</literal> 
+if not specified).
+</para>
+
+<para>
+	Do not attempt to simplify things by placing a <literal>jndi.properties</literal> 
+	file in your deployment or by editing the AS's <literal>conf/jndi.properties</literal> 
+	file. Doing either will almost certainly break things for your application 
+	and quite possibly across the application server. If you want to externalize 
+	your client configuration, one approach is to deploy a properties file not 
+	named <literal>jndi.properties</literal>, and then programatically create a 
+	<literal>Properties</literal> object that loads that file's contents.
+</para>
+
+<section><title>Accessing HA-JNDI Resources from EJBs and WARs -- Environment Naming Context</title>
+	<para>If your HA-JNDI client is an EJB or servlet, the least intrusive way 
+	to configure the lookup of resources is to bind the resources to the 
+	environment naming context of the bean or webapp performing the lookup. The 
+	binding can then be configured to use HA-JNDI instead of a local mapping. 
+	Following is an example of doing this for a JMS connection factory and 
+	queue (the most common use case for this kind of thing).</para>
+	
+	<para>Within the bean definition in the ejb-jar.xml or in the war's web.xml 
+	you will need to define two resource-ref mappings, one for the connection 
+	factory and one for the destination.</para>
+<programlisting role="XML">&lt;resource-ref&gt;
+	&lt;res-ref-name&gt;jms/ConnectionFactory&lt;/res-ref-name&gt;
+	&lt;res-type&gt;javax.jms.QueueConnectionFactory&lt;/res-type&gt;
+	&lt;res-auth&gt;Container&lt;/res-auth&gt;
+&lt;/resource-ref&gt;
+	
+&lt;resource-ref&gt;
+	&lt;res-ref-name&gt;jms/Queue&lt;/res-ref-name&gt;
+	&lt;res-type&gt;javax.jms.Queue&lt;/res-type&gt;
+	&lt;res-auth&gt;Container&lt;/res-auth&gt;
+&lt;/resource-ref&gt;</programlisting>
+
+<para>
+	Using these examples the bean performing the lookup can obtain the connection 
+	factory by looking up 'java:comp/env/jms/ConnectionFactory' and can obtain the 
+	queue by looking up 'java:comp/env/jms/Queue'. 
+</para>
+<para>
+Within the JBoss-specific deployment descriptor (jboss.xml for EJBs, jboss-web.xml 
+for a WAR) these references need to be mapped to a URL that makes use of HA-JNDI.
+</para>
+<programlisting role="XML">&lt;resource-ref&gt;
+	&lt;res-ref-name&gt;jms/ConnectionFactory&lt;/res-ref-name&gt;
+	&lt;jndi-name&gt;jnp://${jboss.bind.address}:1100/ConnectionFactory&lt;/jndi-name&gt;
+&lt;/resource-ref&gt;
+	
+&lt;resource-ref&gt;
+	&lt;res-ref-name&gt;jms/Queue&lt;/res-ref-name&gt;
+	&lt;jndi-name&gt;jnp://${jboss.bind.address}:1100/queue/A&lt;/jndi-name&gt;
+ &lt;/resource-ref&gt;</programlisting>
+
+<para>The URL should be the URL to the HA-JNDI server running on the same node
+ as the bean; if the bean is available the local HA-JNDI server should also be 
+ available. The lookup will then automatically query all of the nodes in the 
+ cluster to identify which node has the JMS resources available.</para>
+<para>The <literal>${jboss.bind.address}</literal> syntax used above tells JBoss
+ to use the value of the <literal>jboss.bind.address</literal> system property
+ when determining the URL. That system property is itself set to whatever value 
+ you assign to the <literal>-b</literal> command line option when you start JBoss AS.
+</para>
+
+</section>
+
+<section><title>Why do this programmatically and not just put this in a jndi.properties file?</title>
+<para>
+	The JBoss application server's internal naming environment is controlled by the  <filename>conf/jndi.properties</filename> file, which should not be edited.
+</para>
+
+<para>
+	No other jndi.properties file should be deployed inside the application server because of the possibility of its being found on the classpath when it shouldn't and thus disrupting the internal operation of the server. For example, if an EJB deployment included a jndi.properties configured for HA-JNDI, when the server binds the EJB proxies into JNDI it will likely bind them into the replicated HA-JNDI tree and not into the local JNDI tree where they belong.
+</para>
+	
+</section>
+
+<section><title>How can I tell if things are being bound into HA-JNDI that shouldn't be?</title>
+	<para>Go into the the jmx-console and execute the <literal>list</literal> operation on the <literal>jboss:service=JNDIView</literal> mbean. Towards the bottom of the results, the contents of the "HA-JNDI Namespace" are listed. Typically this will be empty; if any of your own deployments are shown there and you didn't explicitly bind them there, there's probably an improper jndi.properties file on the classpath. Please visit the following link for an example: <ulink url="http://www.jboss.com/index.html?module=bb&amp;op=viewtopic&amp;t=104715">Problem with removing a Node from Cluster</ulink> </para>
+	
+</section>
+
+</section>
+
+
+<section><title>For clients running outside the application server</title>
+			
+        <para>The JNDI client needs to be aware of the HA-JNDI cluster. You can 
+        pass a list of JNDI servers (i.e., the nodes in the HA-JNDI cluster) to the 
+        <literal>java.naming.provider.url</literal> JNDI setting in the 
+        <literal>jndi.properties</literal> file. Each server node is identified 
+        by its IP address and the JNDI port number. The server nodes are separated 
+        by commas (see <xref linkend="clustering-jndi-jboss"/> for how to configure 
+        the servers and ports).</para>
+	
+<programlisting>java.naming.provider.url=server1:1100,server2:1100,server3:1100,server4:1100</programlisting>
+        <para>When initialising, the JNP client code will try to get in touch 
+        with each server node from the list, one after the other, stopping as 
+        soon as one server has been reached. It will then download the HA-JNDI 
+        stub from this node.</para>
+        <note>
+          <para>There is no load balancing behavior in the JNP client lookup process 
+          itself. It just goes through the provider lists and uses the first 
+          available server to obtain the stub. The HA-JNDI provider list only 
+          needs to contain a subset of HA-JNDI nodes in the cluster; once the
+          HA-JNDI stub is downloaded, the stub will include information on
+          all the available servers. A good practice is to include a set of servers 
+          such that you are certain that at least one of those in the list
+          will be available.</para>
+        </note>
+	
+        <para>
+		The downloaded smart proxy contains the list of currently running nodes and 
+		the logic to load balance naming requests and to fail-over to another node 
+		if necessary. Furthermore, each time a JNDI invocation is made to the server, 
+		the list of targets in the proxy interceptor is updated (only if the list 
+		has changed since the last call).
+	</para>
+	
+        <para>
+		If the property string <literal>java.naming.provider.url</literal> is empty 
+		or if all servers it mentions are not reachable, the JNP client will try 
+		to discover a HA-JNDI server through a multicast call on the network (auto-discovery). 
+		See <xref linkend="clustering-jndi-jboss"/> for how to configure auto-discovery 
+		on the JNDI server nodes. Through auto-discovery, the client might be able 
+		to get a valid HA-JNDI server node without any configuration. Of course, 
+		for auto-discovery to work, the network segment(s) between the client and 
+		the server cluster must be configured to propagate such multicast datagrams.
+	</para>
+        <note>
+		<para>By default the auto-discovery feature uses multicast group address 230.0.0.4 and port 1102.</para>
+        </note>
+	<para>In addition to the <literal>java.naming.provider.url</literal> property, 
+	you can specify a set of other properties. The following list shows all 
+	clustering-related client side properties you can specify when creating a 
+	new <literal>InitialContext</literal>. (All of the standard, non-clustering-related 
+	environment properties used with regular JNDI are also available.)</para>
+        <itemizedlist>
+          <listitem>
+            <para><literal>java.naming.provider.url</literal>: Provides a list 
+            of IP addresses and port numbers for HA-JNDI provider nodes in the 
+            cluster. The client tries those providers one by one and uses the 
+            first one that responds.</para>
+          </listitem>
+          <listitem>
+            <para><literal>jnp.disableDiscovery</literal>: When set to <literal>true</literal>, 
+            this property disables the automatic discovery feature. Default is
+             <literal>false</literal>.</para>
+          </listitem>
+          <listitem>
+		  <para><literal>jnp.partitionName</literal>: In an environment where 
+		  multiple HA-JNDI services bound to distinct clusters (a.k.a. partitions), 
+		  are running, this property allows you to ensure that your client only 
+		  accepts automatic-discovery responses from servers in the desired partition. 
+		  If you do not use the automatic discovery feature (i.e. jnp.disableDiscovery 
+		  is true), this property is not used. By default, this property is not set 
+		  and the automatic discovery selects the first HA-JNDI server that responds, 
+		  regardless of the cluster partition name.</para>
+          </listitem>
+          <listitem>
+            <para><literal>jnp.discoveryTimeout</literal>: Determines how many 
+            milliseconds the context will wait for a response to its automatic 
+            discovery packet. Default is 5000 ms.</para>
+          </listitem>
+          <listitem>
+		  <para><literal>jnp.discoveryGroup</literal>: Determines which multicast 
+		  group address is used for the automatic discovery. Default is 230.0.0.4.  
+		  Must match the value of the AutoDiscoveryAddress configured on the server 
+		  side HA-JNDI service. Note that the server side HA-JNDI service by
+		  default listens on the address specified via the <literal>-u</literal>
+		  startup switch, so if <literal>-u</literal> is used on the server side
+		  (as is recommended), jnp.discoveryGroup will need to be configured on
+		  the client side.</para>
+          </listitem>
+          <listitem>
+		  <para><literal>jnp.discoveryPort</literal>: Determines which multicast 
+		  port is used for the automatic discovery. Default is 1102. Must match the 
+		  value of the AutoDiscoveryPort configured on the server side HA-JNDI service.</para>
+          </listitem>
+  	<listitem>
+		<para><literal>jnp.discoveryTTL</literal>: specifies the TTL (time-to-live) f
+		or autodiscovery IP multicast packets. This value represents the number of 
+		network hops a multicast packet can be allowed to propagate before networking 
+		equipment should drop the packet. Despite its name, it does not represent a unit of time.
+		</para>
+	</listitem>
+		  
+        </itemizedlist>
+
+        <para>Since AS 5.1.0.GA, there's a new system property called <literal>jboss.global.jnp.disableDiscovery</literal> 
+              that controls autodiscovery behaivour at the client VM level and it can take <literal>true</literal> or 
+              <literal>false</literal> (default value) boolean values. The system property works in such way that if 
+              missing or it's set to <literal>false</literal>, default auto discovery behaivour will be used. 
+              If set to <literal>true</literal>, the following can happen:</para>
+        <itemizedlist>
+             <listitem>If jnp.DisableDiscovery not present when context is created, auto discovery will 
+                       not be attempted.</listitem>
+             <listitem>If jnp.DisableDiscovery is present when context is created and this is set to true, 
+                       auto discovery will not be attempted.</listitem>
+             <listitem>If jnp.DisableDiscovery is present when context is created and is set to false, 
+                       the global auto discovery system property is ignored and auto discovery will be attempted. 
+                       This enables global discovery client VM setting to be overriden.</listitem>
+        </itemizedlist>
+      </section>
+
+
+   </section>   
+      
+      <section id="clustering-jndi-jboss">
+        <title>JBoss configuration</title>
+        <para>The <literal>hajndi-jboss-beans.xml</literal> file in the 
+        <literal>JBOSS_HOME/server/all/deploy/cluster</literal> directory
+        includes the following bean to enable HA-JNDI services.</para>
+
+<programlisting>&lt;bean name="HAJNDI" class="org.jboss.ha.jndi.HANamingService"&gt;    
+
+  &lt;annotation&gt;@org.jboss.aop.microcontainer.aspects.jmx.JMX(...)&lt;/annotation&gt;  
+      
+  &lt;!-- The partition used for group RPCs to find locally bound objects on other nodes --&gt;
+  &lt;property name="HAPartition"&gt;&lt;inject bean="HAPartition"/&gt;&lt;/property&gt;
+      
+  &lt;!-- Handler for the replicated tree --&gt;
+  &lt;property name="distributedTreeManager"&gt;
+    &lt;bean class="org.jboss.ha.jndi.impl.jbc.JBossCacheDistributedTreeManager"&gt;
+      &lt;property name="cacheHandler"&gt;&lt;inject bean="HAPartitionCacheHandler"/&gt;&lt;/property&gt;
+    &lt;/bean&gt;
+  &lt;/property&gt;
+      
+  &lt;property name="localNamingInstance"&gt;
+    &lt;inject bean="jboss:service=NamingBeanImpl" property="namingInstance"/&gt;
+  &lt;/property&gt;
+      
+  &lt;!-- The thread pool used to control the bootstrap and auto discovery lookups --&gt;
+  &lt;property name="lookupPool"&gt;&lt;inject bean="jboss.system:service=ThreadPool"/&gt;&lt;/property&gt;
+      
+  &lt;!-- Bind address of bootstrap endpoint --&gt;
+  &lt;property name="bindAddress"&gt;${jboss.bind.address}&lt;/property&gt;
+  &lt;!-- Port on which the HA-JNDI stub is made available --&gt;
+  &lt;property name="port"&gt;
+    &lt;!-- Get the port from the ServiceBindingManager --&gt;
+    &lt;value-factory bean="ServiceBindingManager" method="getIntBinding"&gt;
+      &lt;parameter&gt;jboss:service=HAJNDI&lt;/parameter&gt;
+      &lt;parameter&gt;Port&lt;/parameter&gt;
+    &lt;/value-factory&gt;
+  &lt;/property&gt;
+      
+  &lt;!-- Bind address of the HA-JNDI RMI endpoint --&gt;
+  &lt;property name="rmiBindAddress"&gt;${jboss.bind.address}&lt;/property&gt;
+      
+  &lt;!-- RmiPort to be used by the HA-JNDI service once bound. 0 = ephemeral. --&gt;
+  &lt;property name="rmiPort"&gt;
+    &lt;!-- Get the port from the ServiceBindingManager --&gt;
+    &lt;value-factory bean="ServiceBindingManager" method="getIntBinding"&gt;
+      &lt;parameter&gt;jboss:service=HAJNDI&lt;/parameter&gt;
+      &lt;parameter&gt;RmiPort&lt;/parameter&gt;
+    &lt;/value-factory&gt;
+  &lt;/property&gt;
+      
+  &lt;!-- Accept backlog of the bootstrap socket --&gt;
+  &lt;property name="backlog"&gt;50&lt;/property&gt;
+
+  &lt;!-- A flag to disable the auto discovery via multicast --&gt;
+  &lt;property name="discoveryDisabled"&gt;false&lt;/property&gt;
+  &lt;!-- Set the auto-discovery bootstrap multicast bind address. If not 
+          specified and a BindAddress is specified, the BindAddress will be used. --&gt;
+  &lt;property name="autoDiscoveryBindAddress"&gt;${jboss.bind.address}&lt;/property&gt;
+  &lt;!-- Multicast Address and group port used for auto-discovery --&gt;
+  &lt;property name="autoDiscoveryAddress"&gt;${jboss.partition.udpGroup:230.0.0.4}&lt;/property&gt;
+  &lt;property name="autoDiscoveryGroup"&gt;1102&lt;/property&gt;
+  &lt;!-- The TTL (time-to-live) for autodiscovery IP multicast packets --&gt;
+  &lt;property name="autoDiscoveryTTL"&gt;16&lt;/property&gt;
+      
+  &lt;!-- The load balancing policy for HA-JNDI --&gt;
+  &lt;property name="loadBalancePolicy"&gt;
+       org.jboss.ha.framework.interfaces.RoundRobin
+  &lt;/property&gt;
+
+  &lt;!-- Client socket factory to be used for client-server
+          RMI invocations during JNDI queries
+  &lt;property name="clientSocketFactory"&gt;custom&lt;/property&gt;
+  --&gt;
+  &lt;!-- Server socket factory to be used for client-server
+          RMI invocations during JNDI queries
+  &lt;property name="serverSocketFactory"&gt;custom&lt;/property&gt;
+  --&gt;
+&lt;/bean&gt;</programlisting>
+   
+        <para>You can see that this bean has a number of other services injected 
+        into different properties:
+        
+        <itemizedlist>
+        <listitem><para><emphasis role="bold">HAPartition</emphasis> accepts the
+        core clustering service used manage HA-JNDI's clustered proxies and to 
+        make the group RPCs that find locally bound objects on other nodes.
+        See <xref linkend="clustering-hapartition"/> for more.</para>
+        </listitem>
+        
+        <listitem><para><emphasis role="bold">distributedTreeManager</emphasis> 
+        accepts a handler for the replicated tree. The standard handler uses
+        JBoss Cache to manage the replicated tree. The JBoss Cache instance
+        is retrieved using the injected <literal>HAPartitionCacheHandler</literal>
+        bean. See <xref linkend="clustering-hapartition"/> for more details.</para></listitem>
+        
+        <listitem><para><emphasis role="bold">localNamingInstance</emphasis> accepts
+        the reference to the local JNDI service.</para></listitem>
+        
+        <listitem><para><emphasis role="bold">lookupPool</emphasis> accepts the 
+        thread pool used to provide threads to handle the bootstrap and auto 
+        discovery lookups.
+        </para></listitem>
+        </itemizedlist>
+        </para>
+        
+        <para>
+        Besides the above dependency injected services, the available configuration
+        attributes for the HAJNDI bean are as follows:</para>
+        
+        <itemizedlist>
+          <listitem>
+		  <para><emphasis role="bold">bindAddress</emphasis> specifies the address 
+		  to which the HA-JNDI server will bind to listen for naming proxy download
+		  requests from JNP clients. The default value is the value of the 
+		  <literal>jboss.bind.address</literal> system property, or 
+		  <literal>localhost</literal> if that property is not set.  
+		  The <literal>jboss.bind.address</literal> system property is set if the 
+		  <literal>-b</literal> command line switch is used when JBoss is started.</para>
+          </listitem>
+          
+          <listitem>
+            <para><emphasis role="bold">port</emphasis> specifies the port to
+            which the HA-JNDI server will bind to listen for naming proxy download
+            requests from JNP clients. The value is obtained from the 
+            ServiceBindingManager bean configured in <literal>conf/bootstrap/bindings.xml</literal>. 
+            The default value is <literal>1100</literal>.</para>
+          </listitem>
+          <listitem>
+            <para><emphasis role="bold">Backlog</emphasis> specifies the maximum 
+            queue length for incoming connection indications for the TCP server 
+            socket on which the service listens for naming proxy download
+            requests from JNP clients. The default value is <literal>50</literal>.</para>
+          </listitem>
+          <listitem>
+        <para><emphasis role="bold">rmiBindAddress</emphasis> specifies the address 
+        to which the HA-JNDI server will bind to listen for RMI requests (e.g. 
+        for JNDI lookups) from naming proxies. The default value is the value of the 
+        <literal>jboss.bind.address</literal> system property, or 
+        <literal>localhost</literal> if that property is not set.  
+        The <literal>jboss.bind.address</literal> system property is set if the 
+        <literal>-b</literal> command line switch is used when JBoss is started.</para>
+          </listitem>
+          <listitem>
+		  <para><emphasis role="bold">rmiPort</emphasis> specifies the port to which
+		  the server will bind to communicate with the downloaded stub. The value 
+		  is obtained from the ServiceBindingManager bean configured in 
+		  <literal>conf/bootstrap/bindings.xml</literal>. The default value is 
+		  <literal>1101</literal>. If no value is set, the operating system 
+		  automatically assigns a port.</para>
+          </listitem>
+	       <listitem>
+        <para><emphasis role="bold">discoveryDisabled</emphasis> is a boolean flag 
+        that disables configuration of the auto discovery multicast listener.
+        The default is <literal>false</literal>.
+	    </para>
+    	  </listitem>
+	  
+          <listitem>
+		  <para><emphasis role="bold">autoDiscoveryAddress</emphasis> specifies the 
+		  multicast address to listen to for JNDI automatic discovery. The default 
+		  value is the value of the <literal>jboss.partition.udpGroup</literal>
+		  system property, or 230.0.0.4 if that is not set.  The 
+		  <literal>jboss.partition.udpGroup</literal> system property is set if 
+		  the <literal>-u</literal> command line switch is used when JBoss is started.</para>
+          </listitem>
+          <listitem>
+        <para><emphasis role="bold">autoDiscoveryGroup</emphasis> specifies
+        the port to listen on for multicast JNDI automatic discovery packets.
+        The default value is <literal>1102</literal>.</para>
+          </listitem>
+         
+          <listitem>
+		  <para><emphasis role="bold">autoDiscoveryBindAddress</emphasis> sets the 
+		  interface on which HA-JNDI should listen for auto-discovery request packets. 
+		  If this attribute is not specified and a <literal>bindAddress</literal> is 
+		  specified, the <literal>bindAddress</literal> will be used.</para>
+          </listitem>
+          <listitem>
+		  <para><emphasis role="bold">autoDiscoveryTTL</emphasis> specifies the 
+		  TTL (time-to-live) for autodiscovery IP multicast packets. This value 
+		  represents the number of network hops a multicast packet can be allowed 
+		  to propagate before networking equipment should drop the packet. Despite 
+		  its name, it does not represent a unit of time.</para>
+          </listitem>
+	       <listitem>
+		  <para><emphasis role="bold">loadBalancePolicy</emphasis> specifies the 
+		  class name of the LoadBalancePolicyimplementation that should be included 
+		  in the client proxy.  See <xref linkend="clustering-intro-balancepolicy"/> 
+		  for details.</para>
+		    </listitem>
+		    <listitem>
+		  <para><emphasis role="bold">clientSocketFactory</emphasis> is an optional
+		  attribute that specifies the fully qualified classname of the 
+		  <literal>java.rmi.server.RMIClientSocketFactory</literal> that should be used
+		  to create client sockets. The default is <literal>null</literal>.</para>
+		    </listitem>
+          <listitem>
+        <para><emphasis role="bold">serverSocketFactory</emphasis> is an optional
+        attribute that specifies the fully qualified classname of the 
+        <literal>java.rmi.server.RMIServerSocketFactory</literal> that should be used
+        to create server sockets. The default is <literal>null</literal>.</para>
+          </listitem>
+	 
+        </itemizedlist>
+        
+        <section><title>Adding a Second HA-JNDI Service</title>
+<para>
+	It is possible to start several HA-JNDI services that use different HAPartitions. 
+	This can be used, for example, if a node is part of many logical clusters. In this case, 
+	make sure that you set a different port or IP address for each service. For 
+	instance, if you wanted to hook up HA-JNDI to the example cluster you set up 
+	and change the binding port, the bean descriptor would look as follows (properties
+	that do not vary from the standard deployments are omitted):
+</para>
+
+<programlisting>&lt;-- Cache Handler for secondary HAPartition --&gt;
+&lt;bean name="SecondaryHAPartitionCacheHandler"
+         class="org.jboss.ha.framework.server.HAPartitionCacheHandlerImpl"&gt;
+  &lt;property name="cacheManager"&gt;&lt;inject bean="CacheManager"/&gt;&lt;/property&gt;
+  &lt;property name="cacheConfigName"&gt;secondary-ha-partition&lt;/property&gt;
+&lt;/bean>
+   
+&lt;-- The secondary HAPartition --&gt;
+&lt;bean name="SecondaryHAPartition" class="org.jboss.ha.framework.server.ClusterPartition"&gt;
+  &lt;depends&gt;jboss:service=Naming&lt;/depends&gt;
+       
+  &lt;property name="cacheHandler"&gt;
+    &lt;inject bean="SecondaryHAPartitionCacheHandler"/&gt;
+  &lt;/property&gt;               
+  &lt;property name="partitionName"&gt;SecondaryPartition&lt;/property&gt;
+      
+  ....      
+&lt;/bean&gt;
+   
+&lt;bean name="MySpecialPartitionHAJNDI" class="org.jboss.ha.jndi.HANamingService"&gt;   
+  &lt;property name="HAPartition"&gt;&lt;inject bean="SecondaryHAPartition"/&gt;&lt;/property&gt;
+      
+  &lt;property name="distributedTreeManager"&gt;
+    &lt;bean class="org.jboss.ha.jndi.impl.jbc.JBossCacheDistributedTreeManager"&gt;
+      &lt;property name="cacheHandler"&gt;
+        &lt;inject bean="SecondaryHAPartitionPartitionCacheHandler"/&gt;
+      &lt;/property&gt;
+    &lt;/bean&gt;
+  &lt;/property&gt;
+      
+  &lt;property name="port"&gt;56789&lt;/property&gt;      
+  &lt;property name="rmiPort"&gt;56790&lt;/property&gt;      
+  &lt;property name="autoDiscoveryGroup"&gt;56791&lt;/property&gt;
+      
+  .....
+&lt;/bean&gt;</programlisting>
+      </section>
+        
+        </section>
+    
+</chapter>

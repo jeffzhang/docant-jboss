@@ -1,0 +1,611 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.3//EN" "http://www.oasis-open.org/docbook/xml/4.3/docbookx.dtd">
+
+<chapter id="clustering-entity">
+  <title>Clustered Entity EJBs</title>
+  <para>
+    In a JBoss AS cluster, entity bean instance caches need to be kept in sync across all nodes.
+    If an entity bean provides remote services, the service methods need to be load balanced as well.
+  </para>
+  
+  <section id="clustering-entity-30">
+    <title>Entity Bean in EJB 3.0</title>
+    <para>
+      In EJB 3.0, entity beans primarily serve as a persistence data model.
+      They do not provide remote services.
+      Hence, the entity bean clustering service in EJB 3.0 primarily deals with distributed caching and replication, instead of load balancing.
+    </para>
+
+    <section id="clustering-entity-30-cache">
+      <title>Configure the distributed cache</title>
+      <para>
+        To avoid round trips to the database, you can use a cache for your entities.
+        JBoss EJB 3.0 entity beans are implemented by Hibernate, which has support for a second-level cache.
+        The second-level cache provides the following functionalities:
+      </para>
+      <itemizedlist>
+        <listitem>
+          <para>
+            If you persist a cache-enabled entity bean instance to the database via the entity manager, the entity will be inserted into the cache.
+          </para>
+        </listitem>
+        <listitem>
+          <para>
+            If you update an entity bean instance, and save the changes to the database via the entity manager, the entity will be updated in the cache.
+          </para>
+        </listitem>
+        <listitem>
+          <para>
+            If you remove an entity bean instance from the database via the entity manager, the entity will be removed from the cache.
+          </para>
+        </listitem>
+        <listitem>
+          <para>
+            If loading a cached entity from the database via the entity manager, and that entity does not exist in the database, it will be inserted into the cache.
+          </para>
+        </listitem>
+      </itemizedlist>
+      <para>
+        As well as a region for caching entities, the second-level cache also contains regions for caching collections, queries, and timestamps.
+        The Hibernate setup used for the JBoss EJB 3.0 implementation uses JBoss Cache as its underlying second-level cache implementation.
+      </para>
+      <para>
+        Configuration of a the second-level cache is done via your EJB3 deployment's persistence.xml.
+      </para>
+      <para>
+        e.g.
+      </para>
+      <programlisting><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<persistence xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+    xmlns="http://java.sun.com/xml/ns/persistence"
+  <persistence-unit name="tempdb" transaction-type="JTA">
+    <jta-data-source>java:/DefaultDS</jta-data-source>
+    <properties>
+      <property name="hibernate.cache.use_second_level_cache" value="true"/>
+      <property name="hibernate.cache.use_query_cache" value="true"/>
+      <property name="hibernate.cache.region.factory_class" 
+         value="org.hibernate.cache.jbc2.JndiMultiplexedJBossCacheRegionFactory"/>
+      <!-- region factory specific properties -->
+      <property name="hibernate.cache.region.jbc2.cachefactory" value="java:CacheManager"/>
+      <property name="hibernate.cache.region.jbc2.cfg.entity" value="mvcc-entity"/>
+      <property name="hibernate.cache.region.jbc2.cfg.collection" value="mvcc-entity"/>
+    </properties>
+  </persistence-unit>
+</persistence>]]></programlisting>
+      <variablelist>
+        <varlistentry>
+          <term><emphasis role="bold">hibernate.cache.use_second_level_cache</emphasis></term>
+          <listitem>
+            <para>
+              Enables second-level caching of entities and collections.
+            </para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term><emphasis role="bold">hibernate.cache.use_query_cache</emphasis></term>
+          <listitem>
+            <para>
+              Enables second-level caching of queries.
+            </para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+           <term><emphasis role="bold">hibernate.cache.region.jbc2.query.localonly</emphasis></term>
+           <listitem><para>If you have enabled caching of query results, set to
+           <literal>true</literal> to tell Hibernate you want to suppress costly 
+           replication of those results around the cluster. No need to set this 
+           property if you want query results replicated.
+           </para></listitem>
+        </varlistentry>
+        <varlistentry>
+          <term><emphasis role="bold">hibernate.cache.region.factory_class</emphasis></term>
+          <listitem>
+            <para>
+              Defines the <literal>RegionFactory</literal> implementation that dictates region-specific caching behavior.
+              Hibernate ships with 2 types of JBoss Cache-based second-level caches: shared and multiplexed.
+            </para>
+            <para>
+              A shared region factory uses the same Cache for all cache regions - much like the legacy CacheProvider implementation in older Hibernate versions.
+            </para>
+            <para>Hibernate ships with 2 shared region factory implementations:</para>
+            <variablelist>
+              <varlistentry>
+                <term><emphasis role="bold">org.hibernate.cache.jbc2.SharedJBossCacheRegionFactory</emphasis></term>
+                <listitem>
+                  <para>
+                    Uses a single JBoss Cache configuration, from a newly instantiated CacheManager, for all cache regions.
+                  </para>
+                </listitem>
+              </varlistentry>
+              <varlistentry>
+                <term><emphasis role="bold">org.hibernate.cache.jbc2.JndiSharedJBossCacheRegionFactory</emphasis></term>
+                <listitem>
+                  <para>
+                    Uses a single JBoss Cache configuration, from an existing CacheManager bound to JNDI, for all cache regions.
+                  </para>
+                </listitem>
+              </varlistentry>
+            </variablelist>
+            <para>
+              A multiplexed region factory uses separate Cache instances, using optimized configurations for each cache region.
+            </para>
+            <para>Hibernate ships with 2 multiplexed region factory implementations:</para>
+            <variablelist>
+              <varlistentry>
+                <term><emphasis role="bold">org.hibernate.cache.jbc2.MultiplexedJBossCacheRegionFactory</emphasis></term>
+                <listitem>
+                  <para>
+                    Uses separate JBoss Cache configurations, from a newly instantiated CacheManager, per cache region.
+                  </para>
+                </listitem>
+              </varlistentry>
+              <varlistentry>
+                <term><emphasis role="bold">org.hibernate.cache.jbc2.JndiMultiplexedJBossCacheRegionFactory</emphasis></term>
+                <listitem>
+                  <para>
+                    Uses separate JBoss Cache configurations, from a JNDI-bound CacheManager, see <xref linkend="clustering-blocks-jbc-cachemanager"/>, per cache region.
+                  </para>
+                </listitem>
+              </varlistentry>
+            </variablelist>
+          </listitem>
+        </varlistentry>
+      </variablelist>
+      
+      <note>
+        <title>What <literal>RegionFactory</literal> is best to use inside JBoss AS?</title>
+        <para>Use <literal>org.hibernate.cache.jbc2.JndiMultiplexedJBossCacheRegionFactory</literal>.
+        It integrates cleanly with the <literal>CacheManager</literal> service
+        (see <xref linkend="clustering-blocks-jbc-cachemanager"/> that is the source
+        of JBoss Cache instances for all of the standard JBoss AS clustered services.</para>
+      </note>
+      
+      <para>Depending on what class you specify as your
+      <literal>hibernate.cache.region.factory_class</literal>, there are
+      other configuration properties available that are specific to that
+      <literal>RegionFactory</literal>:</para>
+      
+      <section id="clustering-entity-30-cache-shared">
+         <title>Additional properties for SharedJBossCacheRegionFactory</title>
+         <variablelist>
+            <varlistentry>
+               <term><emphasis role="bold">hibernate.cache.region.jbc2.cfg.shared</emphasis></term>
+               <listitem><para>The classpath or filesystem resource containing the JBoss Cache configuration settings. Default is <literal>treecache.xml</literal></para></listitem>
+           </varlistentry>
+            <varlistentry>
+              <term><emphasis role="bold">hibernate.cache.region.jbc2.cfg.jgroups.stacks</emphasis></term>
+              <listitem><para>The classpath or filesystem resource containing 
+              the JGroups protocol stack configurations. Default is 
+              <literal>org/hibernate/cache/jbc2/builder/jgroups-stacks.xml</literal>
+              </para></listitem>
+            </varlistentry>
+         </variablelist>
+      </section>
+      
+      <section id="clustering-entity-30-cache-jndishared"> 
+        <title>Additional properties for JndiSharedJBossCacheRegionFactory</title>
+        <variablelist>
+            <varlistentry>
+              <term><emphasis role="bold">hibernate.cache.region.jbc2.cfg.shared</emphasis></term>
+              <listitem><para>JNDI name to which the shared <literal>Cache</literal> instance is bound. Configuring this property is required, as there is no default.</para></listitem>
+            </varlistentry>
+        </variablelist>
+      </section>
+      
+      <section id="clustering-entity-30-cache-multiplexed">
+        <title>Additional properties for MultiplexedJBossCacheRegionFactory</title>
+        <variablelist>
+            <varlistentry>
+              <term><emphasis role="bold">hibernate.cache.region.jbc2.configs</emphasis></term>              
+              <listitem><para>The classpath or filesystem resource containing the JBoss Cache configuration settings.
+              Default is <literal>org/hibernate/cache/jbc2/builder/jbc2-configs.xml</literal>.</para></listitem>
+            </varlistentry>
+            <varlistentry>
+              <term><emphasis role="bold">hibernate.cache.region.jbc2.cfg.jgroups.stacks</emphasis></term>
+              <listitem><para>The classpath or filesystem resource containing the JGroups protocol stack configurations.
+              Default is <literal>org/hibernate/cache/jbc2/builder/jgroups-stacks.xml</literal></para></listitem>
+            </varlistentry>
+            <varlistentry>
+              <term><emphasis role="bold">hibernate.cache.region.jbc2.cfg.entity</emphasis></term>
+              <listitem><para>
+                The JBoss Cache configuration used for the entity cache region. Default is <literal>optimistic-entity</literal>.
+                Alternative configurations: mvcc-entity, pessimistic-entity, mvcc-entity-repeatable, optimistic-entity-repeatable, pessimistic-entity-repeatable.
+                See <xref linkend="clustering-blocks-jbc-cachemanager"/>.
+              </para></listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><emphasis role="bold">hibernate.cache.region.jbc2.cfg.collection</emphasis></term>
+        <listitem><para>
+          The JBoss Cache configuration used for the collection cache region.
+          The default behavior is for the collection cache to use the same configuration as the entity cache.
+        </para></listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><emphasis role="bold">hibernate.cache.region.jbc2.cfg.query</emphasis></term>
+        <listitem><para>
+          The JBoss Cache configuration used for the query cache region.
+          The default value is <literal>local-query</literal>, which results in cached query results not being replicated.
+          Alternative configurations: replicated-query
+        </para></listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><emphasis role="bold">hibernate.cache.region.jbc2.cfg.ts</emphasis></term>
+        <listitem><para>
+          The JBoss Cache configuration used for the timestamp cache region.
+          If query caching is used, the corresponding timestamp cache must be replicating, even if the query cache is non-replicating.
+          The timestamp cache region must never share the same cache as the query cache.
+          Default value is <literal>timestamps-cache</literal>.
+        </para></listitem>
+      </varlistentry>
+        </variablelist>
+    </section>
+    
+    <section id="clustering-entity-30-cache-jndimultiplexed">
+        <title>Additional properties for JndiMultiplexedJBossCacheRegionFactory</title>
+        <variablelist>
+            <varlistentry>
+              <term><emphasis role="bold">hibernate.cache.region.jbc2.cachefactory</emphasis></term>
+              <listitem><para>JNDI name to which the <literal>CacheManager</literal> instance is bound.
+              Must be specified, as there is no default. Inside JBoss AS use <literal>java:CacheManager</literal>.</para></listitem>
+            </varlistentry>
+            <varlistentry>
+              <term><emphasis role="bold">hibernate.cache.region.jbc2.cfg.entity</emphasis></term>
+              <listitem><para>
+                The JBoss Cache configuration used for the entity cache region. Default is <literal>optimistic-entity</literal>.
+                Alternative configurations: mvcc-entity, pessimistic-entity, mvcc-entity-repeatable, optimistic-entity-repeatable, pessimistic-entity-repeatable.
+                See <xref linkend="clustering-blocks-jbc-cachemanager"/>.
+              </para></listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><emphasis role="bold">hibernate.cache.region.jbc2.cfg.collection</emphasis></term>
+        <listitem><para>
+          The JBoss Cache configuration used for the collection cache region.
+          The default behavior is for the collection cache to use the same configuration as the entity cache.
+        </para></listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><emphasis role="bold">hibernate.cache.region.jbc2.cfg.query</emphasis></term>
+        <listitem><para>
+          The JBoss Cache configuration used for the query cache region.
+          The default value is <literal>local-query</literal>, which results in cached query results not being replicated.
+          Alternative configurations: replicated-query
+        </para></listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><emphasis role="bold">hibernate.cache.region.jbc2.cfg.ts</emphasis></term>
+        <listitem><para>
+          The JBoss Cache configuration used for the timestamp cache region.
+          If query caching is used, the corresponding timestamp cache must be replicating, even if the query cache is non-replicating.
+          The timestamp cache region must never share the same cache as the query cache.
+          Default value is <literal>timestamps-cache</literal>.
+        </para></listitem>
+      </varlistentry>
+          </variablelist>      
+      </section>
+      
+      <para>
+        Now, we have JBoss Cache configured to support distributed caching of EJB 3.0 entity beans.
+        We still have to configure individual entity beans to use the cache service.
+      </para>
+    </section>
+    <section id="clustering-entity-30-bean">
+      <title>Configure the entity beans for caching</title>
+      
+      <para>
+        Next we need to configure which entities to cache.
+        The default is to not cache anything, even with the settings shown above.
+        We use the <literal>@org.hibernate.annotations.Cache</literal> annotation to tag entity beans that needs to be cached.
+      </para>
+      <programlisting><![CDATA[@Entity 
+@Cache(usage = CacheConcurrencyStrategy.TRANSACTIONAL) 
+public class Account implements Serializable
+{
+   // ... ... 
+}]]></programlisting>
+      <para>
+        A very simplified rule of thumb is that you will typically want to do caching for objects that rarely change, and which are frequently read. 
+        You can fine tune the cache for each entity bean in the appropriate JBoss Cache configuration file, e.g. jboss-cache-manager-jboss-beans.xml.
+        For instance, you can specify the size of the cache.
+        If there are too many objects in the cache, the cache can evict the oldest or least used objects, depending on configuration, to make room for new objects.
+        Assuming the region_prefix specified in <literal>persistence.xml</literal> was <literal>myprefix</literal>, the default name of the cache region for the <literal>com.mycompany.entities.Account</literal> entity bean would be <literal>/myprefix/com/mycompany/entities/Account</literal>.
+      </para>
+      <programlisting><![CDATA[<bean name="..." class="org.jboss.cache.config.Configuration">
+   ... ...
+  <property name="evictionConfig">
+    <bean class="org.jboss.cache.config.EvictionConfig">
+      <property name="wakeupInterval">5000</property>
+      <!--  Overall default -->
+      <property name="defaultEvictionRegionConfig">
+        <bean class="org.jboss.cache.config.EvictionRegionConfig">
+          <property name="regionName">/</property>
+          <property name="evictionAlgorithmConfig">
+            <bean class="org.jboss.cache.eviction.LRUAlgorithmConfig">
+              <!-- Evict LRU node once we have more than this number of nodes -->
+              <property name="maxNodes">10000</property>
+              <!-- And, evict any node that hasn't been accessed in this many seconds -->
+              <property name="timeToLiveSeconds">1000</property>
+              <!-- Don't evict a node that's been accessed within this many seconds. 
+                  Set this to a value greater than your max expected transaction length. -->
+              <property name="minTimeToLiveSeconds">120</property>
+            </bean>
+          </property>
+        </bean>
+      </property>
+      <property name="evictionRegionConfigs">
+        <list>
+          <bean class="org.jboss.cache.config.EvictionRegionConfig">
+            <property name="regionName">/myprefix/com/mycompany/entities/Account</property>
+            <property name="evictionAlgorithmConfig">
+              <bean class="org.jboss.cache.eviction.LRUAlgorithmConfig">
+                <property name="maxNodes">10000</property>
+                <property name="timeToLiveSeconds">5000</property>
+                <property name="minTimeToLiveSeconds">120</property>
+              </bean>
+            </property>
+          </bean>
+           ... ...
+        </list>
+      </property>
+    </bean>
+  </property>
+</bean>]]></programlisting>
+      <para>
+        If you do not specify a cache region for an entity bean class, all instances of this class will be cached using the <literal>defaultEvictionRegionConfig</literal> as defined above.
+        The @Cache annotation exposes an optional attribute “region” that lets you specify the cache region where an entity is to be stored, rather than having it be automatically be created from the fully-qualified class name of the entity class.
+      </para>
+      <programlisting><![CDATA[@Entity 
+@Cache(usage = CacheConcurrencyStrategy.TRANSACTIONAL, region = ”Account”) 
+public class Account implements Serializable
+{ 
+  // ... ... 
+}]]></programlisting>
+      <para>
+        The eviction configuration would then become:
+      </para>
+      <programlisting><![CDATA[<bean name="..." class="org.jboss.cache.config.Configuration">
+   ... ...
+  <property name="evictionConfig">
+    <bean class="org.jboss.cache.config.EvictionConfig">
+      <property name="wakeupInterval">5000</property>
+      <!--  Overall default -->
+      <property name="defaultEvictionRegionConfig">
+        <bean class="org.jboss.cache.config.EvictionRegionConfig">
+          <property name="regionName">/</property>
+          <property name="evictionAlgorithmConfig">
+            <bean class="org.jboss.cache.eviction.LRUAlgorithmConfig">
+              <property name="maxNodes">5000</property>
+              <property name="timeToLiveSeconds">1000</property>
+              <property name="minTimeToLiveSeconds">120</property>
+            </bean>
+          </property>
+        </bean>
+      </property>
+      <property name="evictionRegionConfigs">
+        <list>
+          <bean class="org.jboss.cache.config.EvictionRegionConfig">
+            <property name="regionName">/myprefix/Account</property>
+            <property name="evictionAlgorithmConfig">
+              <bean class="org.jboss.cache.eviction.LRUAlgorithmConfig">
+                <property name="maxNodes">10000</property>
+                <property name="timeToLiveSeconds">5000</property>
+                <property name="minTimeToLiveSeconds">120</property>
+              </bean>
+            </property>
+          </bean>
+           ... ...
+        </list>
+      </property>
+    </bean>
+  </property>
+</bean>]]></programlisting>
+    </section>
+
+    <section>
+      <title>Query result caching</title>
+      <para>  
+        The EJB3 Query API also provides means for you to save the results (i.e., collections of primary keys of entity beans, or collections of scalar values) of specified queries in the second-level cache.
+        Here we show a simple example of annotating a bean with a named query, also providing the Hibernate-specific hints that tells Hibernate to cache the query.
+      </para>
+      <para>
+        First, in persistence.xml you need to tell Hibernate to enable query caching:
+      </para>
+      <screen>&lt;property name="hibernate.cache.use_query_cache" value="true"/&gt;</screen>
+      <para>
+        Next, you create a named query associated with an entity, and tell Hibernate you want to cache the results of that query:
+      </para>
+      <programlisting><![CDATA[@Entity
+@Cache(usage = CacheConcurrencyStrategy.TRANSACTIONAL, region = ”Account”)
+@NamedQueries(
+{
+  @NamedQuery(
+    name = "account.bybranch",
+    query = "select acct from Account as acct where acct.branch = ?1",
+    hints = { @QueryHint(name = "org.hibernate.cacheable", value = "true") }
+  )
+})
+public class Account implements Serializable
+{
+  // ... ... 
+}]]></programlisting>
+      <para>
+        The @NamedQueries, @NamedQuery and @QueryHint annotations are all in the javax.persistence package.
+        See the Hibernate and EJB3 documentation for more on how to use EJB3 queries and on how to instruct EJB3 to cache queries. 
+      </para>
+      <para>
+        By default, Hibernate stores query results in JBoss Cache in a region named {region_prefix}/org/hibernate/cache/StandardQueryCache.
+        Based on this, you can set up separate eviction handling for your query results.
+        So, if the region prefix were set to myprefix in persistence.xml, you could, for example, create this sort of eviction handling:
+      </para>
+      <programlisting><![CDATA[<bean name="..." class="org.jboss.cache.config.Configuration">
+    ... ...
+   <property name="evictionConfig">
+       <bean class="org.jboss.cache.config.EvictionConfig">
+         <property name="wakeupInterval">5000</property>
+         <!--  Overall default -->
+         <property name="defaultEvictionRegionConfig">
+            <bean class="org.jboss.cache.config.EvictionRegionConfig">
+               <property name="regionName">/</property>
+               <property name="evictionAlgorithmConfig">
+                  <bean class="org.jboss.cache.eviction.LRUAlgorithmConfig">
+                     <property name="maxNodes">5000</property>
+                     <property name="timeToLiveSeconds">1000</property>
+                     <property name="minTimeToLiveSeconds">120</property>
+                  </bean>
+               </property>
+            </bean>
+         </property>
+         <property name="evictionRegionConfigs">
+            <list>
+               <bean class="org.jboss.cache.config.EvictionRegionConfig">
+                  <property name="regionName">/myprefix/Account</property>
+                  <property name="evictionAlgorithmConfig">
+                     <bean class="org.jboss.cache.eviction.LRUAlgorithmConfig">
+                        <property name="maxNodes">10000</property>
+                        <property name="timeToLiveSeconds">5000</property>
+                        <property name="minTimeToLiveSeconds">120</property>
+                     </bean>
+                  </property>
+               </bean>
+               <bean class="org.jboss.cache.config.EvictionRegionConfig">
+                  <property name="regionName">/myprefix/org/hibernate/cache/StandardQueryCache</property>
+                  <property name="evictionAlgorithmConfig">
+                     <bean class="org.jboss.cache.eviction.LRUAlgorithmConfig">
+                        <property name="maxNodes">100</property>
+                        <property name="timeToLiveSeconds">600</property>
+                        <property name="minTimeToLiveSeconds">120</property>
+                     </bean>
+                  </property>
+               </bean>
+            </list>
+         </property>
+      </bean>
+   </property>
+</bean>]]></programlisting>
+      <para>
+        The @NamedQuery.hints attribute shown above takes an array of vendor-specific @QueryHints as a value. Hibernate accepts the “org.hibernate.cacheRegion” query hint, where the value is the name of a cache region to use instead ofthe default /org/hibernate/cache/StandardQueryCache. For example:
+      </para>
+      <programlisting><![CDATA[@Entity
+@Cache(usage = CacheConcurrencyStrategy.TRANSACTIONAL, region = ”Account”)
+@NamedQueries(
+{
+  @NamedQuery(
+    name = "account.bybranch",
+    query = "select acct from Account as acct where acct.branch = ?1",
+    hints = 
+    {
+      @QueryHint(name = "org.hibernate.cacheable", value = "true"),
+      @QueryHint(name = ”org.hibernate.cacheRegion, value = ”Queries”)
+    }
+  )
+})
+public class Account implements Serializable
+{
+  // ... ... 
+}]]></programlisting>
+      <para>
+        The related eviction configuration:
+      </para>
+      <programlisting><![CDATA[<bean name="..." class="org.jboss.cache.config.Configuration">
+    ... ...
+   <property name="evictionConfig">
+       <bean class="org.jboss.cache.config.EvictionConfig">
+         <property name="wakeupInterval">5000</property>
+         <!--  Overall default -->
+         <property name="defaultEvictionRegionConfig">
+            <bean class="org.jboss.cache.config.EvictionRegionConfig">
+               <property name="regionName">/</property>
+               <property name="evictionAlgorithmConfig">
+                  <bean class="org.jboss.cache.eviction.LRUAlgorithmConfig">
+                     <property name="maxNodes">5000</property>
+                     <property name="timeToLiveSeconds">1000</property>
+                     <property name="minTimeToLiveSeconds">120</property>
+                  </bean>
+               </property>
+            </bean>
+         </property>
+         <property name="evictionRegionConfigs">
+            <list>
+               <bean class="org.jboss.cache.config.EvictionRegionConfig">
+                  <property name="regionName">/myprefix/Account</property>
+                  <property name="evictionAlgorithmConfig">
+                     <bean class="org.jboss.cache.eviction.LRUAlgorithmConfig">
+                        <property name="maxNodes">10000</property>
+                        <property name="timeToLiveSeconds">5000</property>
+                        <property name="minTimeToLiveSeconds">120</property>
+                     </bean>
+                  </property>
+               </bean>
+               <bean class="org.jboss.cache.config.EvictionRegionConfig">
+                  <property name="regionName">/myprefix/Queries</property>
+                  <property name="evictionAlgorithmConfig">
+                     <bean class="org.jboss.cache.eviction.LRUAlgorithmConfig">
+                        <property name="maxNodes">100</property>
+                        <property name="timeToLiveSeconds">600</property>
+                        <property name="minTimeToLiveSeconds">120</property>
+                     </bean>
+                  </property>
+               </bean>
+                ... ...
+            </list>
+         </property>
+      </bean>
+   </property>
+</bean>]]></programlisting>
+    </section>
+  </section>
+  
+  <section id="clustering-entity-21">
+    <title>Entity Bean in EJB 2.x</title>
+    <para>
+      First of all, it is worth noting that clustering 2.x entity beans is a bad thing to do.
+      Its exposes elements that generally are too fine grained for use as remote objects to clustered remote objects and introduces data synchronization problems that are non-trivial.
+      Do NOT use EJB 2.x entity bean clustering unless you fit into the sepecial case situation of read-only, or one read-write node with read-only nodes synched with the cache invalidation services.
+    </para>
+
+    <para>
+      To use a clustered entity bean, the application does not need to do anything special, except for looking up EJB 2.x remote bean references from the clustered HA-JNDI.
+    </para>
+    <para>
+      To cluster EJB 2.x entity beans, you need to add the <literal>&lt;clustered&gt;</literal> element to the application's <literal>jboss.xml</literal> descriptor file.
+      Below is a typical <literal>jboss.xml</literal> file.
+    </para>
+    <programlisting><![CDATA[<jboss>
+  <enterprise-beans>
+    <entity>
+      <ejb-name>nextgen.EnterpriseEntity</ejb-name>
+      <jndi-name>nextgen.EnterpriseEntity</jndi-name>
+      <clustered>True</clustered>
+      <cluster-config>
+        <partition-name>DefaultPartition</partition-name>
+        <home-load-balance-policy>
+           org.jboss.ha.framework.interfaces.RoundRobin
+        </home-load-balance-policy>
+        <bean-load-balance-policy>
+           org.jboss.ha.framework.interfaces.FirstAvailable
+        </bean-load-balance-policy>
+      </cluster-config>
+    </entity>
+  </enterprise-beans>
+</jboss>]]></programlisting>
+    <para>
+      The EJB 2.x entity beans are clustered for load balanced remote invocations.
+      All the bean instances are synchronized to have the same contents on all nodes.
+    </para>
+    <para>
+      However, clustered EJB 2.x Entity Beans do not have a distributed locking mechanism or a distributed cache. 
+      They can only be synchronized by using row-level locking at the database level (see <literal>&lt;row-lock&gt;</literal> in the CMP specification) or by setting the Transaction Isolation Level of your JDBC driver to be <literal>TRANSACTION_SERIALIZABLE</literal>.
+      Because there is no supported distributed locking mechanism or distributed cache Entity Beans use Commit Option &quot;B&quot; by default (See <literal>standardjboss.xml</literal> and the container configurations Clustered CMP 2.x EntityBean, Clustered CMP EntityBean, or Clustered BMP EntityBean).
+      It is not recommended that you use Commit Option "A" unless your Entity Bean is read-only.
+      (There are some design patterns that allow you to use Commit Option "A" with read-mostly beans.
+      You can also take a look at the Seppuku pattern <ulink url="http://dima.dhs.org/misc/readOnlyUpdates.html"/>.
+      JBoss may incorporate this pattern into later versions.)
+    </para>
+    <note>
+      <para>
+        If you are using Bean Managed Persistence (BMP), you are going to have to implement synchronization on your own.
+        The MVCSoft CMP 2.0 persistence engine (see <ulink url="http://www.jboss.org/jbossgroup/partners.jsp"/>) provides different kinds of optimistic locking strategies that can work in a JBoss cluster.
+      </para>
+    </note>
+  </section>
+</chapter>
+    

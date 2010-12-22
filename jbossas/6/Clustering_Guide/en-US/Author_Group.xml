@@ -1,0 +1,43 @@
+<?xml version='1.0'?>
+<!DOCTYPE authorgroup PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+	  ]>
+<authorgroup>
+	<author>
+		<firstname>Brian</firstname>
+		<surname>Stansberry</surname>
+		<!--<affiliation>
+			<shortaffil></shortaffil>
+			<jobtitle></jobtitle>
+			<orgname>Red Hat</orgname>
+		</affiliation>-->
+	</author>
+	<author>
+		<firstname>Galder</firstname>
+		<surname>Zamarreno</surname>
+		<!--<affiliation>
+			<shortaffil></shortaffil>
+			<jobtitle></jobtitle>
+			<orgname>Red Hat</orgname>
+		</affiliation>-->
+	</author>
+   <author>
+      <firstname>Paul</firstname>
+      <surname>Ferraro</surname>
+      <!--<affiliation>
+         <shortaffil></shortaffil>
+         <jobtitle></jobtitle>
+         <orgname>Red Hat</orgname>
+      </affiliation>-->
+   </author>
+	
+	
+	<editor>
+		<firstname>Samson</firstname>
+		<surname>Kittoli</surname>
+		<!--	<affiliation>
+			<shortaffil></shortaffil>
+			<jobtitle></jobtitle>
+			<orgname>Red Hat</orgname>
+		</affiliation>-->
+	</editor>
+</authorgroup>

@@ -1,0 +1,448 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.3//EN" "http://www.oasis-open.org/docbook/xml/4.3/docbookx.dtd">
+
+   <chapter id="J2EE_Declarative_Security_Overview">
+      <title>J2EE Declarative Security Overview</title>
+      <para>
+         Rather than embedding security into your business component, the J2EE security model is declarative: you describe the security roles and permissions in a standard XML descriptor. This isolates               security from business-level code because security tends to be more a function of where the component is deployed than an inherent aspect of the component's business logic.
+      </para>
+      
+      <para>
+         For example, consider an Automatic Teller Machine (ATM) component used to access a bank account. The security requirements, roles, and permissions of the component will vary independently of how you         access the bank account. How you access your account information may also vary based on which bank is managing the account, or where the ATM is located.
+      </para>
+      
+      <para>
+         Securing a Java EE application is based on the specification of the application security requirements via the standard Java EE deployment descriptors. You secure access to EJBs and web components in         an enterprise application by using the <literal>ejb-jar.xml</literal> and <literal>web.xml</literal> deployment descriptors. The following sections look at the purpose            and usage of the various security elements.
+      </para>
+
+      <section id="J2EE_Declarative_Security_Overview-Security_References">
+         <title>Security References</title>
+         <para>
+            Both EJBs and servlets can declare one or more <literal>security-role-ref</literal> elements as shown in <xref linkend="Security_References-The_security_role_ref_element" />. This element                    declares that a component is using the <literal>role-name</literal> value as an argument to the <literal>isCallerInRole(String)</literal> method. By using the <literal>isCallerInRole</literal>               method, a component can verify whether the caller is in a role that has been declared with a <literal>security-role-ref/role-name</literal> element. The <literal>role-name</literal> element value            must link to a <literal>security-role</literal> element through the <literal>role-link</literal> element. The typical use of <literal>isCallerInRole</literal> is to perform a security check that             cannot be defined by using the role-based <literal>method-permissions</literal> elements.
+         </para>
+      
+         <figure id="Security_References-The_security_role_ref_element">
+            <title>The security-role-ref element</title>
+            <mediaobject>
+               <imageobject>
+                  <imagedata fileref="images/j2ee_security_role_ref.jpg" />
+               </imageobject>
+            </mediaobject>
+         </figure>
+
+         <para>
+            <xref linkend="Security_References-An_ejb_jar.xml_descriptor_fragment_that_illustrates_the_security_role_ref_element_usage." /> shows the use of <literal>security-role-ref</literal> in an                    <literal>ejb-jar.xml</literal>.
+         </para>
+
+         <example id="Security_References-An_ejb_jar.xml_descriptor_fragment_that_illustrates_the_security_role_ref_element_usage.">
+            <title>An ejb-jar.xml descriptor fragment that illustrates the security-role-ref element usage.</title>
+            <programlisting>&lt;!-- A sample ejb-jar.xml fragment --&gt;
+&lt;ejb-jar&gt;
+  &lt;enterprise-beans&gt;
+    &lt;session&gt;
+      &lt;ejb-name&gt;ASessionBean&lt;/ejb-name&gt;
+      ...
+      &lt;security-role-ref&gt;
+          &lt;role-name&gt;TheRoleICheck&lt;/role-name&gt;
+          &lt;role-link&gt;TheApplicationRole&lt;/role-link&gt;
+      &lt;/security-role-ref&gt;
+    &lt;/session&gt;
+  &lt;/enterprise-beans&gt;
+  ...
+&lt;/ejb-jar&gt;
+            </programlisting>
+         </example>
+
+         <para>
+            <xref linkend="Security_References-An_example_web.xml_descriptor_fragment_that_illustrates_the_security_role_ref_element_usage." /> shows the use of <literal>security-role-ref</literal> in a                 <literal>web.xml</literal>.
+         </para>
+
+         <example id="Security_References-An_example_web.xml_descriptor_fragment_that_illustrates_the_security_role_ref_element_usage.">
+            <title>An example web.xml descriptor fragment that illustrates the security-role-ref element usage.</title>
+            <programlisting>&lt;web-app&gt;
+    &lt;servlet&gt;
+        &lt;servlet-name&gt;AServlet&lt;/servlet-name&gt;
+        ...
+        &lt;security-role-ref&gt;
+            &lt;role-name&gt;TheServletRole&lt;/role-name&gt;
+            &lt;role-link&gt;TheApplicationRole&lt;/role-link&gt;
+        &lt;/security-role-ref&gt;
+    &lt;/servlet&gt;
+    ...
+&lt;/web-app&gt;
+            </programlisting>
+         </example>
+      </section>
+		
+      <section id="J2EE_Declarative_Security_Overview-Security_Identity">
+         <title>Security Identity</title>
+         <para>
+            An EJB has the capability to specify what identity an EJB should use when it invokes methods on other components using the <literal>security-identity</literal> element, shown in                              <xref linkend="Security_Identity-The_security_identity_element" />
+         </para>
+
+         <figure id="Security_Identity-The_security_identity_element">
+            <title>The security-identity element</title>
+            <mediaobject>
+               <imageobject>
+                  <imagedata fileref="images/j2ee_security_identity.jpg" />
+               </imageobject>
+            </mediaobject>
+         </figure>
+
+         <para>
+            The invocation identity can be that of the current caller, or it can be a specific role. The application assembler uses the <literal>security-identity</literal> element with a                                <literal>use-caller-identity</literal> child element to indicate that the current caller&#39;s identity should be propagated as the security identity for method invocations made by the EJB.                  Propagation of the caller&#39;s identity is the default used in the absence of an explicit <literal>security-identity</literal> element declaration.
+         </para>
+
+         <para>
+            Alternatively, the application assembler can use the <literal>run-as/role-name</literal> child element to specify that a specific security role given by the <literal>role-name</literal> value                should be used as the security identity for method invocations made by the EJB. Note that this does not change the caller&#39;s identity as seen by the                                                        <literal>EJBContext.getCallerPrincipal()</literal> method. Rather, the caller&#39;s security roles are set to the single role specified by the <literal>run-as/role-name</literal> element value.              One use case for the <literal>run-as</literal> element is to prevent external clients from accessing internal EJBs. You accomplish this by assigning the internal EJB                                          <literal>method-permission</literal> elements that restrict access to a role never assigned to an external client. EJBs that need to use internal EJB are then configured with a                               <literal>run-as/role-name</literal> equal to the restricted role. The following descriptor fragment that illustrates <literal>security-identity</literal> element usage.
+         </para>
+
+         <programlisting>&lt;!-- A sample ejb-jar.xml fragment --&gt;
+&lt;ejb-jar&gt;
+    &lt;enterprise-beans&gt;
+        &lt;session&gt;
+            &lt;ejb-name&gt;ASessionBean&lt;/ejb-name&gt;
+            &lt;!-- ... --&gt;
+            &lt;security-identity&gt;
+                &lt;use-caller-identity/&gt;
+            &lt;/security-identity&gt;
+        &lt;/session&gt;
+        &lt;session&gt;
+            &lt;ejb-name&gt;RunAsBean&lt;/ejb-name&gt;
+            &lt;!-- ... --&gt;
+            &lt;security-identity&gt;
+                &lt;run-as&gt;
+                    &lt;description&gt;A private internal role&lt;/description&gt;
+                    &lt;role-name&gt;InternalRole&lt;/role-name&gt;
+                &lt;/run-as&gt;
+            &lt;/security-identity&gt;
+        &lt;/session&gt;
+    &lt;/enterprise-beans&gt;
+    &lt;!-- ... --&gt;
+&lt;/ejb-jar&gt;
+         </programlisting>
+
+         <para>
+            When you use <literal>run-as</literal> to assign a specific role to outgoing calls, JBoss associates a principal named <literal>anonymous</literal>. If you want another principal to be associated            with the call, you need to associate a <literal>run-as-principal</literal> with the bean in the <literal>jboss.xml</literal> file. The following fragment associates a principal named                         <literal>internal</literal> with <literal>RunAsBean</literal> from the prior example.
+         </para>
+
+         <programlisting>&lt;session&gt;
+    &lt;ejb-name&gt;RunAsBean&lt;/ejb-name&gt;
+    &lt;security-identity&gt;
+        &lt;run-as-principal&gt;internal&lt;/run-as-principal&gt;
+    &lt;/security-identity&gt;
+&lt;/session&gt;
+         </programlisting>
+
+         <para>
+            The <literal>run-as</literal> element is also available in servlet definitions in a <literal>web.xml</literal> file. The following example shows how to assign the role <literal>InternalRole</literal> to a servlet:
+         </para>
+
+         <programlisting>&lt;servlet&gt;
+    &lt;servlet-name&gt;AServlet&lt;/servlet-name&gt;
+    &lt;!-- ... --&gt;
+    &lt;run-as&gt; 
+        &lt;role-name&gt;InternalRole&lt;/role-name&gt;
+    &lt;/run-as&gt;
+&lt;/servlet&gt;
+         </programlisting>
+
+         <para>
+            Calls from this servlet will be associated with the anonymous <literal>principal</literal>. The <literal>run-as-principal</literal> element is available in the <literal>jboss-web.xml</literal>               file to assign a specific principal to go along with the <literal>run-as</literal> role. The following fragment shows how to associate a principal named <literal>internal</literal> to the servlet            in the prior example.
+         </para>
+
+         <programlisting>&lt;servlet&gt;
+    &lt;servlet-name&gt;AServlet&lt;/servlet-name&gt;
+    &lt;run-as-principal&gt;internal&lt;/run-as-principal&gt;
+&lt;/servlet&gt;
+         </programlisting>
+      </section>
+		
+      <section id="J2EE_Declarative_Security_Overview-Security_roles">
+         <title>Security roles</title>
+         <para>
+            The security role name referenced by either the <literal>security-role-ref</literal> or <literal>security-identity</literal> element needs to map to one of the application&#39;s declared roles.              An application assembler defines logical security roles by declaring <literal>security-role</literal> elements. The <literal>role-name</literal> value is a logical application role name like                 Administrator, Architect, SalesManager, etc.
+         </para>
+
+         <para>
+            The J2EE specifications note that it is important to keep in mind that the security roles in the deployment descriptor are used to define the logical security view of an application. Roles                   defined in the J2EE deployment descriptors should not be confused with the user groups, users, principals, and other concepts that exist in the target enterprise&#39;s operational environment.               The deployment descriptor roles are application constructs with application domain-specific names. For example, a banking application might use role names such as BankManager, Teller, or                     Customer.
+         </para>
+
+         <figure id="Security_roles-The_security_role_element">
+            <title>The security-role element</title>
+            <mediaobject>
+               <imageobject>
+                  <imagedata fileref="images/j2ee_security_role.jpg" />
+               </imageobject>
+            </mediaobject>
+         </figure>
+
+         <para>
+            In JBoss, a <literal>security-role</literal> element is only used to map <literal>security-role-ref/role-name</literal> values to the logical role that the component role references. The                     user&#39;s assigned roles are a dynamic function of the application&#39;s security manager, as you will see when we discuss the JBossSX implementation details. JBoss does not require the                     definition of <literal>security-role</literal> elements in order to declare method permissions. However, the specification of <literal>security-role</literal> elements is still a recommended                 practice to ensure portability across application servers and for deployment descriptor maintenance.                                                                                                           <xref linkend="Security_roles-An_ejb_jar.xml_descriptor_fragment_that_illustrates_the_security_role_element_usage." /> shows the usage of the <literal>security-role</literal> in an                           <literal>ejb-jar.xml</literal> file.
+         </para>
+
+         <example id="Security_roles-An_ejb_jar.xml_descriptor_fragment_that_illustrates_the_security_role_element_usage.">
+            <title>An ejb-jar.xml descriptor fragment that illustrates the security-role element usage.</title>
+            <programlisting>&lt;!-- A sample ejb-jar.xml fragment --&gt;
+&lt;ejb-jar&gt;
+    &lt;!-- ... --&gt;
+    &lt;assembly-descriptor&gt;
+        &lt;security-role&gt;
+            &lt;description&gt;The single application role&lt;/description&gt;
+            &lt;role-name&gt;TheApplicationRole&lt;/role-name&gt;
+        &lt;/security-role&gt;
+    &lt;/assembly-descriptor&gt;
+&lt;/ejb-jar&gt;
+            </programlisting>
+         </example>
+
+         <para>
+            <xref linkend="Security_roles-An_example_web.xml_descriptor_fragment_that_illustrates_the_security_role_element_usage." /> shows the usage of the <literal>security-role</literal> in an                       <literal>web.xml</literal> file.
+         </para>
+
+         <example id="Security_roles-An_example_web.xml_descriptor_fragment_that_illustrates_the_security_role_element_usage.">
+            <title>An example web.xml descriptor fragment that illustrates the security-role element usage.</title>
+            <programlisting>&lt;!-- A sample web.xml fragment --&gt;
+&lt;web-app&gt;
+    &lt;!-- ... --&gt;
+    &lt;security-role&gt;
+        &lt;description&gt;The single application role&lt;/description&gt;
+        &lt;role-name&gt;TheApplicationRole&lt;/role-name&gt;
+    &lt;/security-role&gt;
+&lt;/web-app&gt;
+            </programlisting>
+         </example>
+      </section>
+		
+      <section id="J2EE_Declarative_Security_Overview-EJB_method_permissions">
+         <title>EJB method permissions</title>
+         <para>
+            An application assembler can set the roles that are allowed to invoke an EJB&#39;s home and remote interface methods through method-permission element declarations.
+         </para>
+
+         <figure id="EJB_method_permissions-The_method_permissions_element">
+            <title>The method-permissions element</title>
+            <mediaobject>
+               <imageobject>
+                  <imagedata fileref="images/j2ee_method_permission.jpg" />
+               </imageobject>
+            </mediaobject>
+         </figure>
+
+         <para>
+            Each <literal>method-permission</literal> element contains one or more role-name child elements that define the logical roles that are allowed to access the EJB methods as identified by method               child elements. You can also specify an <literal>unchecked</literal> element instead of the <literal>role-name</literal> element to declare that any authenticated user can access the methods                 identified by method child elements. In addition, you can declare that no one should have access to a method that has the <literal>exclude-list</literal> element. If an EJB has methods that have             not been declared as accessible by a role using a <literal>method-permission</literal> element, the EJB methods default to being excluded from use. This is equivalent to defaulting the methods               into the <literal>exclude-list</literal>.
+         </para>
+
+         <figure id="EJB_method_permissions-The_method_element">
+            <title>The method element</title>
+            <mediaobject>
+               <imageobject>
+                  <imagedata fileref="images/j2ee_method.jpg" />
+               </imageobject>
+            </mediaobject>
+         </figure>
+
+         <para>
+            There are three supported styles of method element declarations.
+         </para>
+
+         <para>
+            The first is used for referring to all the home and component interface methods of the named enterprise bean:
+         </para>
+
+         <programlisting>&lt;method&gt;
+    &lt;ejb-name&gt;EJBNAME&lt;/ejb-name&gt;
+    &lt;method-name&gt;*&lt;/method-name&gt;
+&lt;/method&gt;
+         </programlisting>
+
+         <para>
+            The second style is used for referring to a specified method of the home or component interface of the named enterprise bean:
+         </para>
+
+         <programlisting>&lt;method&gt;
+    &lt;ejb-name&gt;EJBNAME&lt;/ejb-name&gt;
+    &lt;method-name&gt;METHOD&lt;/method-name&gt;
+                &lt;/method&gt;
+         </programlisting>
+
+         <para>
+            If there are multiple methods with the same overloaded name, this style refers to all of the overloaded methods.
+         </para>
+
+         <para>
+            The third style is used to refer to a specified method within a set of methods with an overloaded name:
+         </para>
+
+         <programlisting>&lt;method&gt;
+    &lt;ejb-name&gt;EJBNAME&lt;/ejb-name&gt;
+    &lt;method-name&gt;METHOD&lt;/method-name&gt;
+    &lt;method-params&gt;
+        &lt;method-param&gt;PARAMETER_1&lt;/method-param&gt;
+        &lt;!-- ... --&gt;
+        &lt;method-param&gt;PARAMETER_N&lt;/method-param&gt;
+    &lt;/method-params&gt;
+&lt;/method&gt;
+         </programlisting>
+
+         <para>
+            The method must be defined in the specified enterprise bean&#39;s home or remote interface. The method-param element values are the fully qualified name of the corresponding method parameter                 type. If there are multiple methods with the same overloaded signature, the permission applies to all of the matching overloaded methods.
+         </para>
+
+         <para>
+            The optional <literal>method-intf</literal> element can be used to differentiate methods with the same name and signature that are defined in both the home and remote interfaces of an enterprise             bean.
+         </para>
+
+         <para>
+            <xref linkend="EJB_method_permissions-An_ejb_jar.xml_descriptor_fragment_that_illustrates_the_method_permission_element_usage." /> provides complete examples of the                                           <literal>method-permission</literal> element usage.
+         </para>
+
+         <example id="EJB_method_permissions-An_ejb_jar.xml_descriptor_fragment_that_illustrates_the_method_permission_element_usage.">
+            <title>An ejb-jar.xml descriptor fragment that illustrates the method-permission element usage.</title>
+            <programlisting>&lt;ejb-jar&gt;
+    &lt;assembly-descriptor&gt;
+        &lt;method-permission&gt;
+            &lt;description&gt;The employee and temp-employee roles may access any
+                method of the EmployeeService bean &lt;/description&gt;
+            &lt;role-name&gt;employee&lt;/role-name&gt;
+            &lt;role-name&gt;temp-employee&lt;/role-name&gt;
+            &lt;method&gt;
+                &lt;ejb-name&gt;EmployeeService&lt;/ejb-name&gt;
+                &lt;method-name&gt;*&lt;/method-name&gt;
+            &lt;/method&gt;
+        &lt;/method-permission&gt;
+        &lt;method-permission&gt;
+            &lt;description&gt;The employee role may access the findByPrimaryKey,
+                getEmployeeInfo, and the updateEmployeeInfo(String) method of
+                the AardvarkPayroll bean &lt;/description&gt;
+            &lt;role-name&gt;employee&lt;/role-name&gt;
+            &lt;method&gt;
+                &lt;ejb-name&gt;AardvarkPayroll&lt;/ejb-name&gt;
+                &lt;method-name&gt;findByPrimaryKey&lt;/method-name&gt;
+            &lt;/method&gt;
+            &lt;method&gt;
+                &lt;ejb-name&gt;AardvarkPayroll&lt;/ejb-name&gt;
+                &lt;method-name&gt;getEmployeeInfo&lt;/method-name&gt;
+            &lt;/method&gt;
+            &lt;method&gt;
+                &lt;ejb-name&gt;AardvarkPayroll&lt;/ejb-name&gt;
+                &lt;method-name&gt;updateEmployeeInfo&lt;/method-name&gt;
+                &lt;method-params&gt;
+                    &lt;method-param&gt;java.lang.String&lt;/method-param&gt;
+                &lt;/method-params&gt;
+            &lt;/method&gt;
+        &lt;/method-permission&gt;
+        &lt;method-permission&gt;
+            &lt;description&gt;The admin role may access any method of the
+                EmployeeServiceAdmin bean &lt;/description&gt;
+            &lt;role-name&gt;admin&lt;/role-name&gt;
+            &lt;method&gt;
+                &lt;ejb-name&gt;EmployeeServiceAdmin&lt;/ejb-name&gt;
+                &lt;method-name&gt;*&lt;/method-name&gt;
+            &lt;/method&gt;
+        &lt;/method-permission&gt;
+        &lt;method-permission&gt;
+            &lt;description&gt;Any authenticated user may access any method of the
+                EmployeeServiceHelp bean&lt;/description&gt;
+            &lt;unchecked/&gt;
+            &lt;method&gt;
+                &lt;ejb-name&gt;EmployeeServiceHelp&lt;/ejb-name&gt;
+                &lt;method-name&gt;*&lt;/method-name&gt;
+            &lt;/method&gt;
+        &lt;/method-permission&gt;
+        &lt;exclude-list&gt;
+            &lt;description&gt;No fireTheCTO methods of the EmployeeFiring bean may be
+                used in this deployment&lt;/description&gt;
+            &lt;method&gt;
+                &lt;ejb-name&gt;EmployeeFiring&lt;/ejb-name&gt;
+                &lt;method-name&gt;fireTheCTO&lt;/method-name&gt;
+            &lt;/method&gt;
+        &lt;/exclude-list&gt;
+    &lt;/assembly-descriptor&gt;
+&lt;/ejb-jar&gt;
+            </programlisting>
+         </example>
+      </section>
+		
+      <section id="J2EE_Declarative_Security_Overview-Web_Content_Security_Constraints">
+         <title>Web Content Security Constraints</title>
+         <para>
+            In a web application, security is defined by the roles that are allowed access to content by a URL pattern that identifies the protected content. This set of information is declared by using the             <literal>web.xml</literal><literal>security-constraint</literal> element.
+         </para>
+
+         <figure id="Web_Content_Security_Constraints-The_security_constraint_element">
+            <title>The security-constraint element</title>
+            <mediaobject>
+               <imageobject>
+                  <imagedata fileref="images/webapp_security_constraint.jpg" />
+               </imageobject>
+            </mediaobject>
+         </figure>
+
+         <para>
+            The content to be secured is declared using one or more <literal>web-resource-collection</literal> elements. Each <literal>web-resource-collection</literal> element contains an optional series of            <literal>url-pattern</literal> elements followed by an optional series of <literal>http-method</literal> elements. The <literal>url-pattern</literal> element value specifies a URL pattern against            which a request URL must match for the request to correspond to an attempt to access secured content. The <literal>http-method</literal> element value specifies a type of HTTP request to allow.
+         </para>
+
+         <para>
+            The optional <literal>user-data-constraint</literal> element specifies the requirements for the transport layer of the client to server connection. The requirement may be for content integrity               (preventing data tampering in the communication process) or for confidentiality (preventing reading while in transit). The transport-guarantee element value specifies the degree to which                     communication between the client and server should be protected. Its values are <literal>NONE</literal>, <literal>INTEGRAL</literal>, and <literal>CONFIDENTIAL</literal>. A value of                          <literal>NONE</literal> means that the application does not require any transport guarantees. A value of <literal>INTEGRAL</literal> means that the application requires the data sent between the             client and server to be sent in such a way that it can&#39;t be changed in transit. A value of <literal>CONFIDENTIAL</literal> means that the application requires the data to be transmitted in a             fashion that prevents other entities from observing the contents of the transmission. In most cases, the presence of the <literal>INTEGRAL</literal> or <literal>CONFIDENTIAL</literal> flag                   indicates that the use of SSL is required.
+         </para>
+
+         <para>
+            The optional <literal>login-config</literal> element is used to configure the authentication method that should be used, the realm name that should be used for rhw application, and the attributes            that are needed by the form login mechanism.
+         </para>
+
+         <figure id="Web_Content_Security_Constraints-The_login_config_element">
+            <title>The login-config element</title>
+            <mediaobject>
+               <imageobject>
+                  <imagedata fileref="images/webapp_login_config.jpg" />
+               </imageobject>
+            </mediaobject>
+         </figure>
+
+         <para>
+            The <literal>auth-method</literal> child element specifies the authentication mechanism for the web application. As a prerequisite to gaining access to any web resources that are protected by an             authorization constraint, a user must have authenticated using the configured mechanism. Legal <literal>auth-method</literal> values are <literal>BASIC</literal>, <literal>DIGEST</literal>,                  <literal>FORM</literal>, and <literal>CLIENT-CERT</literal>. The <literal>realm-name</literal> child element specifies the realm name to use in HTTP basic and digest authorization. The                       <literal>form-login-config</literal> child element specifies the log in as well as error pages that should be used in form-based login. If the <literal>auth-method</literal> value is not                     <literal>FORM</literal>, then <literal>form-login-config</literal> and its child elements are ignored.
+         </para>
+
+         <para>
+            As an example, the <literal>web.xml</literal> descriptor fragment given in                                                                                                                                     <xref linkend="Web_Content_Security_Constraints-_A_web.xml_descriptor_fragment_which_illustrates_the_use_of_the_security_constraint_and_related_elements." /> indicates that any URL lying under               the web application&#39;s <literal>/restricted</literal> path requires an <literal>AuthorizedUser</literal> role. There is no required transport guarantee and the authentication method used for              obtaining the user identity is BASIC HTTP authentication.
+         </para>
+
+         <example id="Web_Content_Security_Constraints-_A_web.xml_descriptor_fragment_which_illustrates_the_use_of_the_security_constraint_and_related_elements.">
+            <title> A web.xml descriptor fragment which illustrates the use of the security-constraint and related elements.</title>
+            <programlisting>&lt;web-app&gt;
+    &lt;!-- ... --&gt;
+    &lt;security-constraint&gt;
+        &lt;web-resource-collection&gt;
+            &lt;web-resource-name&gt;Secure Content&lt;/web-resource-name&gt;
+            &lt;url-pattern&gt;/restricted/*&lt;/url-pattern&gt;
+        &lt;/web-resource-collection&gt;
+        &lt;auth-constraint&gt;
+            &lt;role-name&gt;AuthorizedUser&lt;/role-name&gt;
+        &lt;/auth-constraint&gt;
+        &lt;user-data-constraint&gt;
+            &lt;transport-guarantee&gt;NONE&lt;/transport-guarantee&gt;
+        &lt;/user-data-constraint&gt;
+    &lt;/security-constraint&gt;
+    &lt;!-- ... --&gt;
+    &lt;login-config&gt;
+        &lt;auth-method&gt;BASIC&lt;/auth-method&gt;
+        &lt;realm-name&gt;The Restricted Zone&lt;/realm-name&gt;
+    &lt;/login-config&gt;
+    &lt;!-- ... --&gt;
+    &lt;security-role&gt;
+        &lt;description&gt;The role required to access restricted content &lt;/description&gt;
+        &lt;role-name&gt;AuthorizedUser&lt;/role-name&gt;
+    &lt;/security-role&gt;
+&lt;/web-app&gt;
+            </programlisting>
+         </example>
+      </section>
+		
+      <section id="J2EE_Declarative_Security_Overview-Enabling_Declarative_Security_in_JBoss">
+         <title>Enabling Declarative Security in JBoss</title>
+         <para>
+            The J2EE security elements that have been covered so far describe the security requirements only from the application&#39;s perspective. Because J2EE security elements declare logical roles, the             application deployer maps the roles from the application domain onto the deployment environment. The J2EE specifications omit these application server-specific details. In JBoss, mapping the                 application roles onto the deployment environment entails specifying a security manager that implements the J2EE security model using JBoss server specific deployment descriptors. The details                behind the security configuration are discussed in <xref linkend="JBoss_Security_Model" />.
+         </para>
+      </section>
+   </chapter>

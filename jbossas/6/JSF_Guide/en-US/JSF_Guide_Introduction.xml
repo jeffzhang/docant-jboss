@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.3//EN" "http://www.oasis-open.org/docbook/xml/4.3/docbookx.dtd">
+
+  <chapter id="jsf-intro.chapt">
+    <title>Introduction</title>
+    
+      <para>
+	      In the past, using a JEE application server meant using the JSF implementation that ships with it.  
+            However, there are subtle differences between JSF implementations.  Applications written for Mojarra
+            don't always run well on MyFaces.  There are sometimes backward compatibility issues between JSF
+            specification levels.  An application written for JSF 1.2 won't always run on JSF 2.0.
+      </para>
+	
+      <para>
+	      JBoss AS6 is designed for maximum flexibility in JSF deployments.  With JBoss AS6, you can use the 
+            default JSF implementation, use a secondary JSF implementation, or bundle
+            your own JSF implementation with the WAR.  You can have different applications in the same server instance 
+            that use different implementations.  Also, you can create your own JSF Configurations that include
+            a JSF implementation, extra libraries, and configuration parameters.  Then assign the configuration
+            to one or more applications.
+      </para>
+
+      <para>
+        In this guide, we'll step through a simple JSF example.  Then we will go through all the powerful deployment
+        options for JSF applications.
+      </para>
+      
+    </chapter>
+

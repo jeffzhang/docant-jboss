@@ -1,0 +1,712 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.3//EN" "http://www.oasis-open.org/docbook/xml/4.3/docbookx.dtd">
+
+  <chapter id="clustering-blocks.chapt">
+       <title>Clustering Building Blocks</title>
+       
+       <para>The clustering features in JBoss AS are built on top of lower level
+       libraries that provide much of the core functionality. <xref linkend="clustering-as-arch.fig"/>
+       shows the main pieces:
+       </para>
+       
+       <figure id="clustering-as-arch.fig">
+            <title>The JBoss AS clustering architecture</title>
+            <mediaobject>
+              <imageobject>
+                <imagedata align="center" fileref="images/clustering-as-arch.png" />
+              </imageobject>
+            </mediaobject>
+       </figure>
+       
+       <para><emphasis role="bold">JGroups</emphasis> is a toolkit for reliable 
+       point-to-point and point-to-multipoint communication. JGroups is used for 
+       all clustering-related communications between nodes in a JBoss AS cluster. 
+       See <xref linkend="clustering-blocks-jgroups"/> for more on how JBoss AS 
+       uses JGroups.</para>
+       
+       <para><emphasis role="bold">JBoss Cache</emphasis> is a highly flexible
+       clustered transactional caching library.  Many AS clustering services 
+       need to cache some state in memory while 1) ensuring for high availability 
+       purposes that a backup copy of that state is available on another node 
+       if it can't otherwise be recreated (e.g. the contents of a web session) 
+       and 2) ensuring that the data cached on each node in the cluster is consistent. 
+       JBoss Cache handles these concerns for most JBoss AS clustered services.
+       JBoss Cache uses JGroups to handle its group communication requirements.
+       <emphasis role="bold">POJO Cache</emphasis> is an extension of the
+       core JBoss Cache that JBoss AS uses to support fine-grained replication
+       of clustered web session state. See <xref linkend="clustering-blocks-jbc"/> 
+       for more on how JBoss AS uses JBoss Cache and POJO Cache.</para>
+       
+       <para><emphasis role="bold">HAPartition</emphasis> is an adapter on top
+       of a JGroups channel that allows multiple services to use the channel.
+       HAPartition also supports a distributed registry of which HAPartition-based
+       services are running on which cluster members. It provides notifications to 
+       interested listeners when the cluster membership changes or the clustered 
+       service registry changes. See <xref linkend="clustering-hapartition"/> for 
+       more details on HAPartition.</para>
+       
+       <para>The other higher level clustering services make use of JBoss Cache
+       or HAPartition, or, in the case of HA-JNDI, both. The exception to this
+       is JBoss Messaging's clustering features, which interact with JGroups 
+       directly.</para>
+       
+       <section id="clustering-blocks-jgroups">
+         <title>Group Communication with JGroups</title>
+         <para>JGroups provides the underlying group communication support for
+       JBoss AS clusters. Services deployed on JBoss AS which need group
+       communication with their peers will obtain a JGroups <literal>Channel</literal>
+       and use it to communicate. The <literal>Channel</literal> handles such
+       tasks as managing which nodes are members of the group, detecting node failures,
+       ensuring lossless,  first-in-first-out delivery of messages to all group members, 
+       and providing flow control to ensure fast message senders cannot overwhelm 
+       slow message receivers. 
+       </para>
+       
+       <para>The characteristics of a JGroups <literal>Channel</literal> are determined
+       by the set of <emphasis>protocols</emphasis> that compose it. Each protocol
+       handles a single aspect of the overall group communication task; for example
+       the <literal>UDP</literal> protocol handles the details of sending and
+       receiving UDP datagrams. A <literal>Channel</literal> that uses the
+       <literal>UDP</literal> protocol is capable of communicating with UDP unicast and
+       multicast; alternatively one that uses the <literal>TCP</literal> protocol
+       uses TCP unicast for all messages. JGroups supports a wide variety of different 
+       protocols (see <xref linkend="jgroups-configuration"/> for details), but
+       the AS ships with a default set of channel configurations that should meet
+       most needs.
+       </para>
+       
+       <para>By default, UDP multicast is used by all JGroups channels used by 
+       the AS (except for one TCP-based channel used by JBoss Messaging).</para>
+         
+         <section id="clustering-blocks-jgroups-channelfactory">
+           <title>The Channel Factory Service</title>
+           <para>A significant difference in JBoss AS 5 versus previous releases 
+           is that JGroups Channels needed by clustering services (e.g. a channel 
+           used by a distributed HttpSession cache) are no longer configured in 
+           detail as part of the consuming service's configuration, and are no longer 
+           directly instantiated by the consuming service. Instead, a new 
+           <literal>ChannelFactory</literal> service is used as a registry for named 
+           channel configurations and as a factory for <literal>Channel</literal> instances. 
+           A service that needs a channel requests the channel from the <literal>ChannelFactory</literal>, 
+           passing in the name of the desired configuration.</para>
+           
+           <para>The ChannelFactory service is deployed in the 
+           <literal>server/all/deploy/cluster/jgroups-channelfactory.sar</literal>.
+           On startup the ChannelFactory service parses the 
+           <literal>server/all/deploy/cluster/jgroups-channelfactory.sar/META-INF/jgroups-channelfactory-stacks.xml</literal>
+           file, which includes various standard JGroups configurations identified 
+           by name (e.g "udp" or "tcp"). Services needing a channel access the channel 
+           factory and ask for a channel with a particular named configuration.
+           </para>
+           
+           <section id="clustering-blocks-jgroups-stdconfigs">
+              <title>Standard Protocol Stack Configurations</title>
+              <para>The standard protocol stack configurations that ship with AS 5 
+              are described below. Note that not all of these are actually used; 
+              many are included as a convenience to users who may wish to alter the 
+              default server configuration. The configurations actually used in a 
+              stock AS 5 <emphasis role="bold">all</emphasis> config are <literal>udp</literal>, 
+              <literal>jbm-control</literal> and <literal>jbm-data</literal>, with 
+              all clustering services other than JBoss Messaging using <literal>udp</literal>.
+              </para>
+               
+               <itemizedlist>
+               <listitem>
+                 <para><emphasis role="bold">udp</emphasis></para>
+                 <para>UDP multicast based stack meant to be shared between different channels. 
+                 Message bundling is disabled, as it can add latency to synchronous 
+                 group RPCs. Services that only make asynchronous RPCs (e.g. JBoss 
+                 Cache configured for REPL_ASYNC) and do so in high volume may 
+                 be able to improve performance by configuring their cache to use 
+                 the <literal>udp-async</literal> stack below. Services that only 
+                 make synchronous RPCs (e.g. JBoss Cache configured for REPL_SYNC 
+                 or INVALIDATION_SYNC) may be able to improve performance by using 
+                 the <literal>udp-sync</literal> stack below, which does not 
+                 include flow control.</para>
+               </listitem>
+               <listitem>
+                 <para><emphasis role="bold">udp-async</emphasis></para>
+                 <para>Same as the default <literal>udp</literal> stack above, 
+                 except message bundling is enabled in the transport protocol 
+                 (<literal>enable_bundling=true</literal>). Useful for services 
+                 that make high-volume asynchronous RPCs (e.g. high volume JBoss Cache 
+                 instances configured for REPL_ASYNC) where message bundling may 
+                 improve performance.</para>
+               </listitem>
+               <listitem>
+                 <para><emphasis role="bold">udp-sync</emphasis></para>
+                 <para>UDP multicast based stack, without flow control and without 
+                 message bundling. This can be used instead of <literal>udp</literal> if 
+                 (1) synchronous calls are used and (2) the message volume (rate and size) 
+                 is not that large. Don't use this configuration if you send 
+                 messages at a high sustained rate, or you might run out of memory.</para>
+               </listitem>
+               <listitem>
+                 <para><emphasis role="bold">tcp</emphasis></para>
+                 <para>TCP based stack, with flow control and message bundling. 
+                 TCP stacks are usually used when IP multicasting cannot be used 
+                 in a network (e.g. routers discard multicast).</para>
+               </listitem>
+               <listitem>
+                 <para><emphasis role="bold">tcp-sync</emphasis></para>
+                 <para>TCP based stack, without flow control and without message 
+                 bundling. TCP stacks are usually used when IP multicasting 
+                 cannot be used in a network (e.g.routers discard multicast). 
+                 This configuration should be used instead of <literal>tcp</literal> 
+                 above when (1) synchronous calls are used and (2) the message 
+                 volume (rate and size) is not that large.  Don't use this 
+                 configuration if you send messages at a high sustained rate, 
+                 or you might run out of memory.</para>
+               </listitem>
+               <listitem>
+                 <para><emphasis role="bold">jbm-control</emphasis></para>
+                 <para>Stack optimized for the JBoss Messaging Control Channel. 
+                 By default uses the same UDP transport protocol config as is 
+                 used for the default 'udp' stack defined above. This allows the 
+                 JBoss Messaging Control Channel to use the same sockets, network 
+                 buffers and thread pools as are used by the other standard 
+                 JBoss AS clustered services (see 
+                 <xref linkend="clustering-blocks-jgroups-sharedtransport"/>.</para>
+               </listitem>
+               <listitem>
+                 <para><emphasis role="bold">jbm-data</emphasis></para>
+                 <para>Stack optimized for the JBoss Messaging Data Channel. TCP-based</para>
+               </listitem>
+               </itemizedlist>
+               
+               <para>You can add a new stack configuration by adding a new <literal>stack</literal> 
+               element to the <literal>server/all/deploy/cluster/jgroups-channelfactory.sar/META-INF/jgroups-channelfactory-stacks.xml</literal>
+               file. You can alter the behavior of an existing configuration by 
+               editing this file. Before doing this though, have a look at the 
+               other standard configurations the AS ships; perhaps one of those 
+               meets your needs.  Also, please note that before editing a 
+               configuration you should understand what services are using that 
+               configuration; make sure the change you are making is appropriate 
+               for all affected services.  If the change isn't appropriate for a 
+               particular service, perhaps its better to create a new configuration 
+               and change some services to use that new configuration.</para>
+            </section>
+           
+           <para>It's important to note that if several services request a channel 
+           with the same configuration name from the ChannelFactory, they are not 
+           handed a reference to the same underlying Channel. Each receives its own 
+           Channel, but the channels will have an identical configuration. A logical 
+           question is how those channels avoid forming a group with each other 
+           if each, for example, is using the same multicast address and port. 
+           The answer is that when a consuming service connects its Channel, it 
+           passes a unique-to-that-service <literal>cluster_name</literal> argument 
+           to the <literal>Channel.connect(String cluster_name)</literal> method. 
+           The Channel uses that <literal>cluster_name</literal> as one of the factors 
+           that determine whether a particular message received over the 
+           network is intended for it.</para>
+         </section>
+         
+         <section id="clustering-blocks-jgroups-sharedtransport">
+           <title>The JGroups Shared Transport</title>
+           <para>As the number of JGroups-based clustering services running in 
+           the AS has risen over the years, the need to share the resources 
+           (particularly sockets and threads) used by these channels became 
+           a glaring problem.  A stock AS 5 <emphasis role="bold">all</emphasis>
+           config will connect 4 JGroups channels during startup, and a total of 
+           7 or 8 will be connected if distributable web apps, clustered EJB3 
+           SFSBs and a clustered JPA/Hibernate second level cache are all used. 
+           So many channels can consume a lot of resources, and can be a real 
+           configuration nightmare if the network environment requires 
+           configuration to ensure cluster isolation.</para>
+           
+           <para>Beginning with AS 5, JGroups supports sharing of transport 
+           protocol instances between channels. A JGroups channel is composed of 
+           a stack of individual protocols, each of which is responsible for 
+           one aspect of the channel's behavior. A transport protocol is a 
+           protocol that is responsible for actually sending messages on the 
+           network and receiving them from the network. The resources that are 
+           most desirable for sharing (sockets and thread pools) are managed by 
+           the transport protocol, so sharing a transport protocol between channels 
+           efficiently accomplishes JGroups resource sharing.</para>
+           
+           <para>
+           To configure a transport protocol for sharing, simply add a 
+           <literal>singleton_name="someName"</literal> attribute to the protocol's 
+           configuration. All channels whose transport protocol config uses the 
+           same <literal>singleton_name</literal> value will share their transport.  
+           All other protocols in the stack will not be shared. The following 
+           illustrates 4 services running in a VM, each with its own channel. 
+           Three of the services are sharing a transport; the fourth is using 
+           its own transport.</para>
+           
+           
+       
+       <figure id="clustering-blocks-jgroups-sharedtp.fig">
+            <title>Services using a Shared Transport</title>
+            <mediaobject>
+              <imageobject>
+                <imagedata align="center" scalefit="1" fileref="images/clustering-SharedTransport.png" />
+              </imageobject>
+            </mediaobject>
+       </figure>
+       
+       <para>The protocol stack configurations used by the AS 5 ChannelFactory 
+       all have a singleton_name configured. In fact, if you add a stack to the 
+       ChannelFactory that doesn't include a <literal>singleton_name</literal>, 
+       before creating any channels for that stack, the ChannelFactory will 
+       synthetically create a <literal>singleton_name</literal> by concatenating 
+       the stack name to the string "unnamed_", e.g. unnamed_customStack.</para>
+         </section>
+       </section>
+
+       <section id="clustering-blocks-jbc">
+	       <title>Distributed Caching with JBoss Cache</title>
+	       <para>
+	         JBoss Cache is a fully featured distributed cache framework that can be 
+	         used in any application server environment or standalone. JBoss Cache 
+	         provides the underlying distributed caching support used by many of the 
+	         standard clustered services in a JBoss AS cluster, including:
+		      <itemizedlist>
+		      <listitem><para>Replication of clustered webapp sessions.</para></listitem>
+		      <listitem><para>Replication of clustered EJB3 Stateful Session beans.</para></listitem>
+		      <listitem><para>Clustered caching of JPA and Hibernate entities.</para></listitem>
+		      <listitem><para>Clustered Single Sign-On.</para></listitem>
+		      <listitem><para>The HA-JNDI replicated tree.</para></listitem>
+		      <listitem><para>DistributedStateService</para></listitem>
+		      </itemizedlist>
+		    </para>
+	    
+	        <para>Users can also create their own JBoss Cache and POJO Cache 
+	        instances for custom use by their applications, see 
+	        <xref linkend="jbosscache.chapt"/> for more on this.</para>
+	       
+	       <section id="clustering-blocks-jbc-cachemanager">
+	          <title>The JBoss AS CacheManager Service</title>
+	          <para>Many of the standard clustered services in JBoss AS use JBoss 
+	          Cache to maintain consistent state across the cluster.  Different 
+	          services (e.g. web session clustering or second level caching of 
+	          JPA/Hibernate entities) use different JBoss Cache instances, with 
+	          each cache configured to meet the needs of the service that uses it. 
+	          In AS 4, each of these caches was independently deployed in the 
+	          <literal>deploy/</literal> directory, which had a number of disadvantages:
+	          <itemizedlist>
+	          <listitem><para>Caches that end user applications 
+	          didn't need were deployed anyway, with each creating an expensive 
+	          JGroups channel. For example, even if there were no clustered EJB3 
+	          SFSBs, a cache to store them was started.</para></listitem>
+             <listitem><para>Caches are internal details of the services that 
+             use them. They shouldn't be first-class deployments.</para></listitem>
+             <listitem><para>Services would find their cache via JMX lookups. 
+             Using JMX for purposes other exposing management interfaces is just 
+             not the JBoss 5 way.</para></listitem>
+	          </itemizedlist>
+	          </para>
+	          
+	          <para>In JBoss 5, the scattered cache deployments have been replaced 
+	          with a new <emphasis role="bold">CacheManager</emphasis> service, 
+	          deployed via the <literal>JBOSS_HOME/server/all/deploy/cluster/jboss-cache-manager.sar</literal>. 
+	          The CacheManager is a factory and registry for JBoss Cache instances. 
+	          It is configured with a set of named JBoss Cache configurations. 
+	          Services that need a cache ask the cache manager for the cache by 
+	          name; the cache manager creates the cache (if not already created) 
+	          and returns it.  The cache manager keeps a reference to each cache 
+	          it has created, so all services that request the same cache configuration
+	          name will share the same cache. When a service is done with the cache, 
+	          it releases it to the cache manager.  The cache manager keeps track 
+	          of how many services are using each cache, and will stop and destroy 
+	          the cache when all services have released it.</para>
+	          
+	          <section id="clustering-blocks-jbc-cachemanager-stdconfigs">
+	            <title>Standard Cache Configurations</title>
+	            <para>The following standard JBoss Cache configurations ship with JBoss AS 5. 
+	            You can add others to suit your needs, or edit these configurations 
+	            to adjust cache behavior. Additions or changes are done by editing 
+	            the <literal>deploy/cluster/jboss-cache-manager.sar/META-INF/jboss-cache-manager-jboss-beans.xml</literal> 
+	            file (see <xref linkend="jbosscache-custom-deployment-cachemgr"/> 
+	            for details). Note however that these configurations are specifically 
+	            optimized for their intended use, and except as specifically noted 
+	            in the documentation chapters for each service in this guide,
+	            it is not advisable to change them.</para>
+	            
+	            <itemizedlist>
+               <listitem>
+                 <para><emphasis role="bold">standard-session-cache</emphasis></para>
+                 <para>Standard cache used for web sessions.</para>
+               </listitem>
+               
+               <listitem>
+                 <para><emphasis role="bold">field-granularity-session-cache</emphasis></para>
+                 <para>Standard cache used for FIELD granularity web sessions.</para>
+               </listitem>
+               
+               <listitem>
+                 <para><emphasis role="bold">sfsb-cache</emphasis></para>
+                 <para>Standard cache used for EJB3 SFSB caching.</para>
+               </listitem>
+               
+               <listitem>
+                 <para><emphasis role="bold">ha-partition</emphasis></para>
+                 <para>Used by web tier Clustered Single Sign-On, 
+                 HA-JNDI, Distributed State.</para>
+               </listitem>
+               
+               <listitem>
+                 <para><emphasis role="bold">mvcc-entity</emphasis></para>
+                 <para>A config appropriate for JPA/Hibernate entity/collection 
+               caching that uses JBC's MVCC locking (see notes below).</para>
+               </listitem>
+               
+               <listitem>
+                 <para><emphasis role="bold">optimistic-entity</emphasis></para>
+                 <para>A config appropriate for JPA/Hibernate entity/collection 
+               caching that uses JBC's optimistic locking (see notes below).
+               </para>
+               </listitem>
+               
+               <listitem>
+                 <para><emphasis role="bold">pessimistic-entity</emphasis></para>
+                 <para>A config appropriate for JPA/Hibernate entity/collection 
+               caching that uses JBC's pessimistic locking (see notes below).
+               </para>
+               </listitem>
+               
+               <listitem>
+                 <para><emphasis role="bold">mvcc-entity-repeatable</emphasis></para>
+                 <para>Same as "mvcc-entity" but uses JBC's REPEATABLE_READ 
+               isolation level instead of READ_COMMITTED (see notes below).
+               </para>
+               </listitem>
+               
+               <listitem>
+                 <para><emphasis role="bold">pessimistic-entity-repeatable</emphasis></para>
+                 <para>Same as "pessimistic-entity" but uses JBC's REPEATABLE_READ 
+               isolation level instead of READ_COMMITTED (see notes below).
+               </para>
+               </listitem>
+               
+               <listitem>
+                 <para><emphasis role="bold">local-query</emphasis></para>
+                 <para>A config appropriate for JPA/Hibernate query result caching. 
+               Does not replicate query results. DO NOT store the timestamp data 
+               Hibernate uses to verify validity of query results in this cache.</para>
+               </listitem>
+               
+               <listitem>
+                 <para><emphasis role="bold">replicated-query</emphasis></para>
+                 <para>A config appropriate for JPA/Hibernate query result caching. 
+               Replicates query results. DO NOT store the timestamp data 
+               Hibernate uses to verify validity of query result in this cache.</para>
+               </listitem>
+               
+               <listitem>
+                 <para><emphasis role="bold">timestamps-cache</emphasis></para>
+                 <para>A config appropriate for the timestamp data cached as part 
+               of JPA/Hibernate query result caching. A replicated timestamp cache 
+               is required if query result caching is used, even if the query results 
+               themselves use a non-replicating cache like <literal>local-query</literal>.</para>
+               </listitem>
+               
+               <listitem>
+                 <para><emphasis role="bold">mvcc-shared</emphasis></para>
+                 <para>A config appropriate for a cache that's shared for JPA/Hibernate 
+               entity, collection, query result  and timestamp caching. Not an 
+               advised configuration, since it requires cache mode REPL_SYNC, 
+               which is the least efficient mode. Also requires a full state 
+               transfer at startup, which can be expensive. Maintained for 
+               backwards compatibility reasons, as a shared cache was the only 
+               option in JBoss 4. Uses JBC's MVCC locking.</para>
+               </listitem>
+               
+               <listitem>
+                 <para><emphasis role="bold">optimistic-shared</emphasis></para>
+                 <para>A config appropriate for a cache that's shared for JPA/Hibernate 
+               entity, collection, query result  and timestamp caching. Not an 
+               advised configuration, since it requires cache mode REPL_SYNC, 
+               which is the least efficient mode. Also requires a full state 
+               transfer at startup, which can be expensive. Maintained for 
+               backwards compatibility reasons, as a shared cache was the only 
+               option in JBoss 4. Uses JBC's optimistic locking.</para>
+               </listitem>
+               
+               <listitem>
+                 <para><emphasis role="bold">pessimistic-shared</emphasis></para>
+                 <para>A config appropriate for a cache that's shared for JPA/Hibernate 
+               entity, collection, query result  and timestamp caching. Not an 
+               advised configuration, since it requires cache mode REPL_SYNC, 
+               which is the least efficient mode. Also requires a full state 
+               transfer at startup, which can be expensive. Maintained for 
+               backwards compatibility reasons, as a shared cache was the only 
+               option in JBoss 4. Uses JBC's pessimistic locking.</para>
+               </listitem>
+               
+               <listitem>
+                 <para><emphasis role="bold">mvcc-shared-repeatable</emphasis></para>
+                 <para>Same as "mvcc-shared" but uses JBC's REPEATABLE_READ 
+               isolation level instead of READ_COMMITTED (see notes below).
+               </para>
+               </listitem>
+               
+               <listitem>
+                 <para><emphasis role="bold">pessimistic-shared-repeatable</emphasis></para>
+                 <para>Same as "pessimistic-shared" but uses JBC's REPEATABLE_READ 
+               isolation level instead of READ_COMMITTED. (see notes below).
+               </para>
+               </listitem>
+               
+	            </itemizedlist>
+	            
+	            <note><para>For more on JBoss Cache's locking schemes, see
+               <xref linkend="jbosscache-configuration-concurrency"/>)</para></note>
+               
+	            <note><para>For JPA/Hibernate second level caching, REPEATABLE_READ is 
+               only useful if the application evicts/clears entities from the 
+               EntityManager/Hibernate Session and then expects to repeatably 
+               re-read them in the same transaction. Otherwise, the Session's 
+               internal cache provides a repeatable-read semantic.</para></note>
+	            
+	          </section>
+	          
+	          <section>
+	            <title>Cache Configuration Aliases</title>
+	            <para>The CacheManager also supports aliasing of caches; i.e. 
+	            allowing caches registered under one name to be looked up under a 
+	            different name. Aliasing is useful for sharing caches between 
+	            services whose configuration may specify different cache config 
+	            names. It's also useful for supporting legacy EJB3 application 
+	            configurations ported over from AS 4.</para>
+	            <para>Aliases can be configured by editing the "CacheManager" 
+	            bean in the <literal>jboss-cache-manager-jboss-beans.xml</literal> 
+	            file. The following redacted config shows the standard aliases in 
+	            AS 5.0.0.GA:</para>
+	            
+	            <programlisting><![CDATA[
+<bean name="CacheManager" class="org.jboss.ha.cachemanager.CacheManager">
+
+    . . .
+
+    <!-- Aliases for cache names. Allows caches to be shared across 
+         services that may expect different cache config names. -->
+    <property name="configAliases">
+       <map keyClass="java.lang.String" valueClass="java.lang.String">
+          <!-- Use the HAPartition cache for ClusteredSSO caching -->
+          <entry>
+             <key>clustered-sso</key>
+             <value>ha-partition</value>
+          </entry>
+          <!-- Handle the legacy name for the EJB3 SFSB cache -->
+          <entry>
+             <key>jboss.cache:service=EJB3SFSBClusteredCache</key>
+             <value>sfsb-cache</value>
+          </entry>
+          <!-- Handle the legacy name for the EJB3 Entity cache -->
+          <entry>
+             <key>jboss.cache:service=EJB3EntityTreeCache</key>
+             <value>mvcc-shared</value>
+          </entry>
+       </map>
+    </property>
+    
+    . . .
+    
+</bean>]]></programlisting>
+	       </section>
+       </section>
+     </section>
+       
+       <section id="clustering-hapartition">
+         <title>The HAPartition Service</title>
+         <para>
+          HAPartition is a general purpose service used for a variety of tasks 
+          in AS clustering.  At its core, it is an abstraction built on top of 
+          a JGroups <literal>Channel</literal> that provides support for making/receiving RPC 
+          invocations on/from one or more cluster members.  HAPartition allows
+          services that use it to share a single <literal>Channel</literal> and
+          multiplex RPC invocations over it, eliminating the configuration complexity
+          and runtime overhead of having each service create its own <literal>Channel</literal>.
+          HAPartition also supports a distributed registry of which clustering services are 
+          running on which cluster members. It provides notifications to 
+          interested listeners when the cluster membership changes or the 
+          clustered service registry changes. HAPartition forms the core of many 
+          of the clustering services we'll be discussing in the rest of this 
+          guide, including smart client-side clustered proxies, EJB 2 SFSB 
+          replication and entity cache management, farming, HA-JNDI and HA singletons.
+          Custom services can also make use of HAPartition.
+         </para>
+       
+       
+       
+        <para>The following snippet shows the <literal>HAPartition</literal> service definition packaged with the standard JBoss AS distribution.
+          This configuration can be found in the <literal>server/all/deploy/cluster/hapartition-jboss-beans.xml</literal> file.
+        </para>
+        <programlisting><![CDATA[<bean name="HAPartitionCacheHandler"
+      class="org.jboss.ha.framework.server.HAPartitionCacheHandlerImpl">
+      <property name="cacheManager"><inject bean="CacheManager"/></property>
+      <property name="cacheConfigName">ha-partition</property>
+</bean>
+   
+<bean name="HAPartition" class="org.jboss.ha.framework.server.ClusterPartition">
+
+   <depends>jboss:service=Naming</depends>
+   <annotation>@org.jboss.aop.microcontainer.aspects.jmx.JMX(...)</annotation>
+      
+   <!-- ClusterPartition requires a Cache for state management -->
+   <property name="cacheHandler"><inject bean="HAPartitionCacheHandler"/></property>               
+   <!-- Name of the partition being built -->
+   <property name="partitionName">${jboss.partition.name:DefaultPartition}</property>         
+   <!-- The address used to determine the node name -->
+   <property name="nodeAddress">${jboss.bind.address}</property>              
+   <!-- Max time (in ms) to wait for state transfer to complete. -->
+   <property name="stateTransferTimeout">30000</property>              
+   <!-- Max time (in ms) to wait for RPC calls to complete. -->
+   <property name="methodCallTimeout">60000</property> 
+           
+   <!-- Optionally provide a thread source to allow async connect of our channel -->
+   <property name="threadPool">
+      <inject bean="jboss.system:service=ThreadPool"/>
+   </property>
+      
+   <property name="distributedStateImpl">
+      <bean name="DistributedState"
+            class="org.jboss.ha.framework.server.DistributedStateImpl">
+         <annotation>@org.jboss.aop.microcontainer.aspects.jmx.JMX(...)</annotation>
+         <property name="cacheHandler">
+            <inject bean="HAPartitionCacheHandler"/>
+         </property>                  
+      </bean>
+   </property>      
+</bean>]]></programlisting>
+        <para>Much of the above is boilerplate; below we'll touch on the key points
+        relevant to end users. There are two beans defined above, the 
+        <literal>HAPartitionCacheHandler</literal> and the <literal>HAPartition</literal> itself.</para>
+        
+        <para>The <literal>HAPartition</literal> bean itself exposes the following
+        configuration properties:</para>
+        <itemizedlist>
+          <listitem>
+            <para><emphasis role="bold">partitionName</emphasis> specifies the
+          name of the cluster. Its default value is <literal>DefaultPartition</literal>. Use the <literal>-g </literal> (a.k.a. --partition) command line switch to set this value at JBoss startup.</para>
+          </listitem>
+          <listitem>
+            <para><emphasis role="bold">nodeAddress</emphasis> is unused and can be ignored.</para>
+          </listitem>
+          <listitem>
+            <para><emphasis role="bold">stateTransferTimeout</emphasis> specifies the timeout (in milliseconds) for initial application state transfer. State transfer refers to the process of obtaining a serialized copy of initial application state from other already-running cluster members at service startup.  Its default value is <literal>30000</literal>. </para>
+          </listitem>
+          <listitem>
+            <para><emphasis role="bold">methodCallTimeout</emphasis> specifies the timeout (in milliseconds) for obtaining responses to group RPCs from the other cluster members. Its default value is <literal>60000</literal>. </para>
+          </listitem>
+        </itemizedlist>
+        
+        <para>The <literal>HAPartitionCacheHandler</literal> is a small utility service that
+        helps the HAPartition integrate with JBoss Cache 
+        (see <xref linkend="clustering-blocks-jbc-cachemanager"/>). HAPartition exposes
+        a child service called DistributedState (see <xref linkend="clustering-hapartition-distributedstate"/>) 
+        that uses JBoss Cache; the <literal>HAPartitionCacheHandler</literal> helps ensure
+        consistent configuration between the JGroups <literal>Channel</literal> used by
+        Distributed State's cache and the one used directly by HAPartition.</para>
+        
+        <itemizedlist>
+          <listitem>
+            <para><emphasis role="bold">cacheConfigName</emphasis> the name of the 
+            JBoss Cache configuration to use for the HAPartition-related cache. 
+            Indirectly, this also specifies the name of the JGroups protocol
+            stack configuration HAPartition should use. See 
+            <xref linkend="jbosscache-configuration-jgroups"/> for more on 
+            how the JGroups protocol stack is configured.</para>
+          </listitem>
+        </itemizedlist>
+        
+        <para>In order for nodes to form a cluster, they must have the exact same <literal>partitionName</literal> 
+        and the <literal>HAPartitionCacheHandler</literal>'s <literal>cacheConfigName</literal> 
+        must specify an identical JBoss Cache configuration. Changes in either 
+        element on some but not all nodes would prevent proper clustering behavior.
+    </para>
+       
+        <para>You can view the current cluster information by pointing your browser to the JMX console of any
+                    JBoss instance in the cluster (i.e., <literal>http://hostname:8080/jmx-console/</literal>) and then
+          clicking on the <literal>jboss:service=HAPartition,partition=DefaultPartition</literal> MBean (change the MBean name to reflect your partitionr name if you use the -g startup switch). A list of IP addresses for the current cluster members is shown in the CurrentView field.</para>
+       
+        <note><title>Note</title>
+   <para>
+      While it is technically possible to put a JBoss server instance into multiple HAPartitions at the same time, this practice is generally not recommended, as it increases management complexity.
+   </para>
+   </note>
+   
+     <section id="clustering-hapartition-drm">
+        <title>DistributedReplicantManager Service</title>
+        <para>
+           The <literal>DistributedReplicantManager</literal> (DRM) service is a component 
+           of the HAPartition service made available to HAPartition
+           users via the <literal>HAPartition.getDistributedReplicantManager()</literal>
+           method. Generally speaking, JBoss AS users will not directly make
+           use of the DRM; we discuss it here as an aid to those who want a
+           deeper understanding of how AS clustering internals work.</para>
+        <para>
+           The DRM is a distributed registry that allows HAPartition users to
+           register objects under a given key, making available to callersthe 
+           set of objects registered under that key by the various members of t
+           he cluster. The DRM also provides a notification mechanism so interested 
+           listeners can be notified when the contents of the registry changes.
+        </para>
+        <para>There are two main usages for the DRM in JBoss AS:</para>
+        
+        <itemizedlist>
+         <listitem>
+         <para><emphasis role="bold">Clustered Smart Proxies</emphasis></para>
+         <para>Here the keys are the names of the various services that need a
+         clustered smart proxy (see <xref linkend="clustering-concepts-arch-proxy"/>, 
+         e.g. the name of a clustered EJB. The value object each node stores in 
+         the DRM is known as a "target". It's something a smart proxy's transport 
+         layer can use to contact the node (e.g. an RMI stub, an HTTP URL or a JBoss Remoting 
+         <literal>InvokerLocator</literal>). The factory that builds clustered smart 
+         proxies accesses the DRM to get the set of "targets" that should be
+         injected into the proxy to allow it to communicate with all the
+         nodes in a cluster.</para>
+         </listitem>
+         <listitem>
+         <para><emphasis role="bold">HASingleton</emphasis></para>
+         <para>Here the keys are the names of the various services that need to 
+         function as High Availablity Singletons (see <xref linkend="clustering-hasingleton"/>).
+         The value object each node stores in the DRM is simply a String that
+         acts as a token to indicate that the node has the service deployed, and
+         thus is a candidate to become the "master" node for the HA singleton
+         service.</para>
+         </listitem>
+        </itemizedlist>
+        
+        <para>In both cases, the key under which objects are registered identifies
+        a particular clustered service. It is useful to understand that every 
+        node in a cluster doesn't have to register an object under every key. 
+        Only services that are deployed on a particular node will register 
+        something under that service's key, and services don't have to be 
+        deployed homogeneously across the cluster. The DRM is thus useful as a 
+        mechanism for understanding a service's "topology" around the cluster 
+        -- which nodes have the service deployed.</para>
+     </section>
+     
+     <section id="clustering-hapartition-distributedstate">
+        <title>DistributedState Service</title>
+        <para>
+           The <literal>DistributedState</literal> service is a legacy component 
+           of the HAPartition service made available to HAPartition
+           users via the <literal>HAPartition.getDistributedState()</literal>
+           method. This service provides coordinated management of arbitary
+           application state around the cluster. It is supported for backwards 
+           compatibility reasons, but new applications should not use it; they 
+           should use the much more sophisticated JBoss Cache instead.
+        </para>
+        <para>In JBoss 5 the <literal>DistributedState</literal> service actually
+        delegates to an underlying JBoss Cache instance.</para>
+     </section>
+     
+     <section id="clustering-hapartition-customsvcs">
+        <title>Custom Use of HAPartition</title>
+        
+        <para>Custom services can also use make use of HAPartition to handle
+        interactions with the cluster. Generally the easiest way to do this
+        is to extend the <literal>org.jboss.ha.framework.server.HAServiceImpl</literal>
+        base class, or the <literal>org.jboss.ha.jxm.HAServiceMBeanSupport</literal>
+        class if JMX registration and notification support are desired.
+        </para>
+        
+     </section>
+
+</section>
+     
+      </chapter>
+

@@ -1,0 +1,237 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.3//EN" "http://www.oasis-open.org/docbook/xml/4.3/docbookx.dtd">
+
+   <chapter id="Introduction_to_JAAS">
+      <title>Introduction to JAAS</title>
+      <para>
+         The JBossSX framework is based on the JAAS API. It is important that you understand the basic elements of the JAAS API to understand the implementation details of JBossSX. The following sections             provide an introduction to JAAS to prepare you for the JBossSX architecture discussion later in this chapter.
+      </para>
+
+      <para>
+         The JAAS 1.0 API consists of a set of Java packages designed for user authentication and authorization. It implements a Java version of the standard                                                           <emphasis>Pluggable Authentication Module</emphasis> (PAM) framework and compatibly extends the Java 2 Platform&#39;s access control architecture to support user-based authorization. JAAS was                first released as an extension package for JDK 1.3 and is bundled with JDK 1.4+. Because the JBossSX framework uses only the authentication capabilities of JAAS to implement the declarative                  role-based J2EE security model, this introduction focuses on only that topic.
+      </para>
+
+      <para>
+         JAAS authentication is performed in a pluggable fashion. This permits Java applications to remain independent from underlying authentication technologies and allows the JBossSX security                      manager to work in different security infrastructures. Integration with a security infrastructure can be achieved without changing the JBossSX security manager implementation. All that needs                 to change is the configuration of the authentication stack that JAAS uses.
+      </para>
+
+      <section id="Introduction_to_JAAS-The_JAAS_Core_Classes">
+         <title>The JAAS Core Classes</title>
+         <para>
+            The JAAS core classes can be broken down into three categories: common, authentication, and authorization. The following list presents only the common and authentication classes because                      these are the specific classes used to implement the functionality of JBossSX covered in this chapter.
+         </para>
+
+         <para>
+            The are the common classes:
+         </para>
+
+         <itemizedlist spacing="compact">
+            <listitem>
+               <para>
+                  <literal>Subject</literal> (<literal>javax.security.auth.Subject</literal>)
+               </para>
+            </listitem>
+            <listitem>
+               <para>
+                  <literal>Principal</literal> (<literal>java.security.Principal</literal>)
+               </para>
+            </listitem>
+         </itemizedlist>
+
+         <para>
+            These are the authentication classes:
+         </para>
+
+         <itemizedlist spacing="compact">
+            <listitem>
+               <para>
+                  <literal>Callback</literal> (<literal>javax.security.auth.callback.Callback</literal>)
+               </para>
+            </listitem>
+            <listitem>
+               <para>
+                  <literal>CallbackHandler</literal> (<literal>javax.security.auth.callback.CallbackHandler</literal>)
+               </para>
+            </listitem>
+            <listitem>
+               <para>
+                  <literal>Configuration</literal> (<literal>javax.security.auth.login.Configuration</literal>)
+               </para>
+            </listitem>
+            <listitem>
+               <para>
+                  <literal>LoginContext</literal> (<literal>javax.security.auth.login.LoginContext</literal>)
+               </para>
+            </listitem>
+            <listitem>
+               <para>
+                  <literal>LoginModule</literal> (<literal>javax.security.auth.spi.LoginModule</literal>)
+               </para>
+            </listitem>
+         </itemizedlist>
+
+         <section id="The_JAAS_Core_Classes-The_Subject_and_Principal_Classes">
+            <title>The Subject and Principal Classes</title>
+            <para>
+               To authorize access to resources, applications first need to authenticate the request&#39;s source. The JAAS framework defines the term subject to represent a request&#39;s source. The                       <literal>Subject</literal> class is the central class in JAAS. A <literal>Subject</literal> represents information for a single entity, such as a person or service. It encompasses the                        entity&#39;s principals, public credentials, and private credentials. The JAAS APIs use the existing Java 2 <literal>java.security.Principal</literal> interface to represent a principal,                     which is essentially just a typed name.
+            </para>
+
+            <para>
+               During the authentication process, a subject is populated with associated identities, or principals. A subject may have many principals. For example, a person may have a name principal                       (John Doe), a social security number principal (123-45-6789), and a username principal (johnd), all of which help distinguish the subject from other subjects. To retrieve the principals                      associated with a subject, two methods are available:
+            </para>
+
+            <programlisting>public Set getPrincipals() {...}
+public Set getPrincipals(Class c) {...} 
+            </programlisting>
+
+            <para>
+               The first method returns all principals contained in the subject. The second method returns only those principals that are instances of class <literal>c</literal> or one of its                               subclasses. An empty set is returned if the subject has no matching principals. Note that the <literal>java.security.acl.Group</literal> interface is a subinterface of                                        <literal>java.security.Principal</literal>, so an instance in the principals set may represent a logical grouping of other principals or groups of principals.
+            </para>
+         </section>
+				
+         <section id="The_JAAS_Core_Classes-Authentication_of_a_Subject">
+            <title>Authentication of a Subject</title>
+            <para>
+               Authentication of a subject requires a JAAS login. The login procedure consists of the following steps:
+            </para>
+
+            <orderedlist>
+               <listitem>
+                  <para>
+                     An application instantiates a <literal>LoginContext</literal> and passes in the name of the login configuration and a <literal>CallbackHandler</literal> to populate the                                       <literal>Callback</literal> objects, as required by the configuration <literal>LoginModule</literal>s.
+                  </para>
+               </listitem>
+               <listitem>
+                  <para>
+                     The <literal>LoginContext</literal> consults a <literal>Configuration</literal> to load all the <literal>LoginModules</literal> included in the named login configuration. If no                               such named configuration exists the <literal>other</literal> configuration is used as a default.
+                  </para>
+               </listitem>
+               <listitem>
+                  <para>
+                     The application invokes the <literal>LoginContext.login</literal> method.
+                  </para>
+               </listitem>
+               <listitem>
+                  <para>
+                     The login method invokes all the loaded <literal>LoginModule</literal>s. As each <literal>LoginModule</literal> attempts to authenticate the subject, it invokes the handle method                             on the associated <literal>CallbackHandler</literal> to obtain the information required for the authentication process. The required information is passed to the handle method in                             the form of an array of <literal>Callback</literal> objects. Upon success, the <literal>LoginModule</literal>s associate relevant principals and credentials with the subject.
+                  </para>
+               </listitem>
+               <listitem>
+                  <para>
+                     The <literal>LoginContext</literal> returns the authentication status to the application. Success is represented by a return from the login method. Failure is represented through a                           LoginException being thrown by the login method.
+                  </para>
+               </listitem>
+               <listitem>
+                  <para>
+                     If authentication succeeds, the application retrieves the authenticated subject using the <literal>LoginContext.getSubject</literal> method.
+                  </para>
+               </listitem>
+               <listitem>
+                  <para>
+                     After the scope of the subject authentication is complete, all principals and related information associated with the subject by the login method can be removed by invoking the                               <literal>LoginContext.logout</literal> method.
+                  </para>
+               </listitem>
+            </orderedlist>
+
+            <para>
+               The <literal>LoginContext</literal> class provides the basic methods for authenticating subjects and offers a way to develop an application that is independent of the underlying                              authentication technology. The <literal>LoginContext</literal> consults a <literal>Configuration</literal> to determine the authentication services configured for a particular                                application. <literal>LoginModule</literal> classes represent the authentication services. Therefore, you can plug different login modules into an application without changing the                            application itself. The following code shows the steps required by an application to authenticate a subject.
+            </para>
+
+            <programlisting>CallbackHandler handler = new MyHandler();
+LoginContext lc = new LoginContext(&quot;some-config&quot;, handler);
+
+try {
+    lc.login();
+    Subject subject = lc.getSubject();
+} catch(LoginException e) {
+    System.out.println(&quot;authentication failed&quot;);
+    e.printStackTrace();
+}
+                        
+// Perform work as authenticated Subject
+// ...
+
+// Scope of work complete, logout to remove authentication info
+try {
+    lc.logout();
+} catch(LoginException e) {
+    System.out.println(&quot;logout failed&quot;);
+    e.printStackTrace();
+}
+                        
+// A sample MyHandler class
+class MyHandler implements CallbackHandler
+{
+    public void handle(Callback[] callbacks) throws
+        IOException, UnsupportedCallbackException
+    {
+        for (int i = 0; i &lt; callbacks.length; i++) {
+            if (callbacks[i] instanceof NameCallback) {
+                NameCallback nc = (NameCallback)callbacks[i];
+                nc.setName(username);
+            } else if (callbacks[i] instanceof PasswordCallback) {
+                PasswordCallback pc = (PasswordCallback)callbacks[i];
+                pc.setPassword(password);
+            } else {
+                throw new UnsupportedCallbackException(callbacks[i],
+                                                       &quot;Unrecognized Callback&quot;);
+            }
+        }
+    }
+}
+            </programlisting>
+
+            <para>
+               Developers integrate with an authentication technology by creating an implementation of the <literal>LoginModule</literal> interface. This allows an administrator to plug different                           authentication technologies into an application. You can chain together multiple <literal>LoginModule</literal>s to allow for more than one authentication technology to participate in                        the authentication process. For example, one <literal>LoginModule</literal> may perform username/password-based authentication, while another may interface to hardware devices such as                        smart card readers or biometric authenticators.
+            </para>
+
+            <para>
+               The life cycle of a <literal>LoginModule</literal> is driven by the <literal>LoginContext</literal> object against which the client creates and issues the login method. The process                           consists of two phases. The steps of the process are as follows:
+            </para>
+
+            <itemizedlist>
+               <listitem>
+                  <para>
+                     The <literal>LoginContext</literal> creates each configured <literal>LoginModule</literal> using its public no-arg constructor.
+                  </para>
+               </listitem>
+               <listitem>
+                  <para>
+                     Each <literal>LoginModule</literal> is initialized with a call to its initialize method. The <literal>Subject</literal> argument is guaranteed to be non-null. The signature of the                            initialize method is: <literal>public void initialize(Subject subject, CallbackHandler callbackHandler, Map sharedState, Map options)</literal>.
+                  </para>
+               </listitem>
+               <listitem>
+                  <para>
+                     The <literal>login</literal> method is called to start the authentication process. For example, a method implementation might prompt the user for a username and password and then                             verify the information against data stored in a naming service such as NIS or LDAP. Alternative implementations might interface to smart cards and biometric devices, or simply                                extract user information from the underlying operating system. The validation of user identity by each <literal>LoginModule</literal> is considered phase 1 of JAAS authentication.                            The signature of the <literal>login</literal> method is <literal>boolean login() throws LoginException</literal>. A <literal>LoginException</literal> indicates failure. A return                              value of true indicates that the method succeeded, whereas a return valueof false indicates that the login module should be ignored.
+                  </para>
+               </listitem>
+               <listitem>
+                  <para>
+                     If the <literal>LoginContext</literal>&#39;s overall authentication succeeds, <literal>commit</literal> is invoked on each <literal>LoginModule</literal>. If phase 1 succeeds for a                           <literal>LoginModule</literal>, then the commit method continues with phase 2 and associates the relevant principals, public credentials, and/or private credentials with the                                  subject. If phase 1 fails for a <literal>LoginModule</literal>, then <literal>commit</literal> removes any previously stored authentication state, such as usernames or passwords.                             The signature of the <literal>commit</literal> method is: <literal>boolean commit() throws LoginException</literal>. Failure to complete the commit phase is indicated by throwing a                           <literal>LoginException</literal>. A return of true indicates that the method succeeded, whereas a return of false indicates that the login module should be ignored.
+                  </para>
+               </listitem>
+               <listitem>
+                  <para>
+                     If the <literal>LoginContext</literal>&#39;s overall authentication fails, then the <literal>abort</literal> method is invoked on each <literal>LoginModule</literal>. The                                     <literal>abort</literal> method removes or destroys any authentication state created by the login or initialize methods. The signature of the <literal>abort</literal> method is                               <literal>boolean abort() throws LoginException</literal>. Failure to complete the <literal>abort</literal> phase is indicated by throwing a <literal>LoginException</literal>. A                               return of true indicates that the method succeeded, whereas a return of false indicates that the login module should be ignored.
+                  </para>
+               </listitem>
+               <listitem>
+                  <para>
+                     To remove the authentication state after a successful login, the application invokes <literal>logout</literal> on the <literal>LoginContext</literal>. This in turn results in a                               <literal>logout</literal> method invocation on each <literal>LoginModule</literal>. The <literal>logout</literal> method removes the principals and credentials originally                                     associated with the subject during the <literal>commit</literal> operation. Credentials should be destroyed upon removal. The signature of the <literal>logout</literal> method is:                            <literal>boolean logout() throws LoginException</literal>. Failure to complete the logout process is indicated by throwing a <literal>LoginException</literal>. A return of true                               indicates that the method succeeded, whereas a return of false indicates that the login module should be ignored.
+                  </para>
+               </listitem>
+             </itemizedlist>
+		
+             <para>
+                When a <literal>LoginModule</literal> must communicate with the user to obtain authentication information, it uses a <literal>CallbackHandler</literal> object. Applications implement                         the <literal>CallbackHandler</literal> interface and pass it to the LoginContext, which forwards it directly to the underlying login modules. Login modules use the                                            <literal>CallbackHandler</literal> both to gather input from users, such as a password or smart card PIN, and to supply information to users, such as status information. By allowing the                      application to specify the <literal>CallbackHandler</literal>, underlying <literal>LoginModule</literal>s remain independent from the different ways applications interact with users.                         For example, a <literal>CallbackHandler</literal>&#39;s implementation for a GUI application might display a window to solicit user input. On the other hand, a                                                <literal>callbackhandler</literal>&#39;s implementation for a non-GUI environment, such as an application server, might simply obtain credential information by using an application                           server API. The <literal>callbackhandler</literal> interface has one method to implement:
+            </para>
+
+            <programlisting>void handle(Callback[] callbacks) throws java.io.IOException, UnsupportedCallbackException;
+            </programlisting>
+
+            <para>
+               The <literal>Callback</literal> interface is the last authentication class we will look at. This is a tagging interface for which several default implementations are provided, including                      the <literal>NameCallback</literal> and <literal>PasswordCallback</literal> used in an earlier example. A <literal>LoginModule</literal> uses a <literal>Callback</literal> to request                         information required by the authentication mechanism. <literal>LoginModule</literal>s pass an array of <literal>Callback</literal>s directly to the                                                            <literal>CallbackHandler.handle</literal> method during the authentication&#39;s login phase. If a <literal>callbackhandler</literal> does not understand how to use a                                         <literal>Callback</literal> object passed into the handle method, it throws an <literal>UnsupportedCallbackException</literal> to abort the login call.
+            </para>
+         </section>
+      </section>
+   </chapter>

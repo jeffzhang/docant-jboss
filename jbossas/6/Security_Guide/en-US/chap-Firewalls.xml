@@ -1,0 +1,188 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd">
+<chapter id="chap-Firewalls">
+  <title>Firewalls</title>
+  <para>
+   JBoss AS ships with many socket-based services that require open firewall ports. <xref linkend="table-Default_Configuration_Ports"/> lists services that listen on ports that must be activated when accessing JBoss behind a firewall.  <xref linkend="Configuring_JBoss_for_use_Behind_a_Firewall-Additional_ports_in_the_all_configuration"/> lists additional ports that exist in the all profile.
+  </para>
+  <table id="table-Default_Configuration_Ports">
+    <title>The ports found in the default configuration</title>
+    <tgroup cols="3">
+      <colspec colnum="1" colname="c1" colwidth="50px"/>
+      <colspec colnum="2" colname="c2" colwidth="50px"/>
+      <colspec colnum="3" colname="c3" colwidth="350px"/>
+      <thead>
+        <row>
+          <entry> Port </entry>
+          <entry> Type </entry>
+          <entry> Service </entry>
+        </row>
+      </thead>
+      <tbody>
+        <row>
+          <entry>1098 </entry>
+          <entry>TCP </entry>
+          <entry>
+            <classname>org.jboss.naming.NamingService</classname>
+          </entry>
+        </row>
+        <row>
+          <entry>1099 </entry>
+          <entry>TCP </entry>
+          <entry>
+            <classname>org.jboss.naming.NamingService</classname>
+          </entry>
+        </row>
+        <row>
+          <entry>4444 </entry>
+          <entry>TCP </entry>
+          <entry>
+            <classname>org.jboss.invocation.jrmp.server.JRMPInvoker</classname>
+          </entry>
+        </row>
+        <row>
+          <entry>4445 </entry>
+          <entry>TCP </entry>
+          <entry>
+            <classname>org.jboss.invocation.pooled.server.PooledInvoker</classname>
+          </entry>
+        </row>
+        <row>
+          <entry>8009 </entry>
+          <entry>TCP </entry>
+          <entry>
+            <classname>org.jboss.web.tomcat.tc4.EmbeddedTomcatService</classname>
+          </entry>
+        </row>
+        <row>
+          <entry>8080 </entry>
+          <entry>TCP </entry>
+          <entry>
+            <classname>org.jboss.web.tomcat.tc4.EmbeddedTomcatService</classname>
+          </entry>
+        </row>
+        <row>
+          <entry>8083 </entry>
+          <entry>TCP </entry>
+          <entry>
+            <classname>org.jboss.web.WebService</classname>
+          </entry>
+        </row>
+        <row>
+          <entry>8093 </entry>
+          <entry>TCP </entry>
+          <entry>
+            <classname>org.jboss.mq.il.uil2.UILServerILService</classname>
+          </entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </table>
+  <table id="Configuring_JBoss_for_use_Behind_a_Firewall-Additional_ports_in_the_all_configuration">
+    <title>Additional ports in the all configuration</title>
+    <tgroup cols="3">
+      <colspec colnum="1" colname="c1" colwidth="50px"/>
+      <colspec colnum="2" colname="c2" colwidth="50px"/>
+      <colspec colnum="3" colname="c3" colwidth="350px"/>
+      <thead>
+        <row>
+          <entry> Port </entry>
+          <entry> Type </entry>
+          <entry> Service </entry>
+        </row>
+      </thead>
+      <tbody>
+        <row>
+          <entry>1100 </entry>
+          <entry>TCP </entry>
+          <entry>
+            <classname>org.jboss.ha.jndi.HANamingService</classname>
+          </entry>
+        </row>
+        <row>
+          <entry>1101 </entry>
+          <entry>TCP </entry>
+          <entry>
+            <classname>org.jboss.ha.jndi.HANamingService</classname>
+          </entry>
+        </row>
+        <row>
+          <entry>1102 </entry>
+          <entry>UDP </entry>
+          <entry>
+            <classname>org.jboss.ha.jndi.HANamingService</classname>
+          </entry>
+        </row>
+        <row>
+          <entry>1161 </entry>
+          <entry>UDP </entry>
+          <entry>
+            <classname>org.jboss.jmx.adaptor.snmp.agent.SnmpAgentService</classname>
+          </entry>
+        </row>
+        <row>
+          <entry>1162 </entry>
+          <entry>UDP </entry>
+          <entry>
+            <classname>org.jboss.jmx.adaptor.snmp.trapd.TrapdService</classname>
+          </entry>
+        </row>
+        <row>
+          <entry>1389</entry>
+          <entry>TCP</entry>
+          <entry>
+            <classname>ldaphost.jboss.org.LdapLoginModule</classname>
+          </entry>
+        </row>
+        <row>
+          <entry>3843<footnote>
+              <para>Necessary only if SSL transport is configured for EJB3</para>
+            </footnote></entry>
+          <entry>TCP</entry>
+          <entry>
+            <classname>org.jboss.ejb3.SSLRemotingConnector</classname>
+          </entry>
+        </row>
+        <row>
+          <entry>3528 </entry>
+          <entry>TCP </entry>
+          <entry>
+            <classname>org.jboss.invocation.iiop.IIOPInvoker</classname>
+          </entry>
+        </row>
+        <row>
+          <entry>3873</entry>
+          <entry>TCP</entry>
+          <entry>
+            <classname>org.jboss.ejb3.RemotingConnectors</classname>
+          </entry>
+        </row>
+        <row>
+          <entry>4447 </entry>
+          <entry>TCP </entry>
+          <entry>
+            <classname>org.jboss.invocation.jrmp.server.JRMPInvokerHA</classname>
+          </entry>
+        </row>
+        <row>
+          <entry>10099</entry>
+          <entry>RMI</entry>
+          <entry>
+            <classname>org.jboss.security.srp.SRPRemoteServerInterface</classname>
+          </entry>
+        </row>
+        <row>
+          <entry> 45566<footnote>
+              <para>
+        Plus two additional anonymous UDP ports, one can be set using the <literal>rcv_port</literal>, and the other cannot be set.
+       </para>
+            </footnote></entry>
+          <entry>UDP </entry>
+          <entry>
+            <classname>org.jboss.ha.framework.server.ClusterPartition</classname>
+          </entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </table>
+</chapter>

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE book PUBLIC "-//OASIS//DTD DocBook XML V4.3//EN" "http://www.oasis-open.org/docbook/xml/4.3/docbookx.dtd">
+<book>
+  
+<xi:include href="Book_Info.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+
+ 
+<part id="Core_Services">
+   <title>Introduction and Core Services</title>
+   <xi:include href="Clustering_Guide_Introduction.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+   <xi:include href="Clustering_Guide_Concepts.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+   <xi:include href="Clustering_Guide_Building_Blocks.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+   <xi:include href="Clustering_Guide_Deployment.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+</part>
+
+<part id="Clustered_JEE">
+  <title>Clustered Java EE</title>
+  <xi:include href="Clustering_Guide_JNDI.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="Clustering_Guide_EJBs.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="Clustering_Guide_Entity_EJBs.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="Clustering_Guide_HTTP.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="Clustering_Guide_JMS.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+</part>
+
+<part id="JGroups_JBC">
+  <title>JGroups and JBoss Cache</title>
+  <xi:include href="Clustering_Guide_JGroups.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="Clustering_Guide_JBoss_Cache.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+</part>
+
+</book>

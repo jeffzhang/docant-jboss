@@ -1,0 +1,113 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd">
+
+   <chapter id="Static_Security_Domains">
+      <title>Static Security Domains</title>
+      <para>
+         The standard way of configuring security domains for authentication and authorization in JBoss is to use the XML login configuration file. The login configuration policy defines a set of named               security domains that each define a stack of login modules that will be called upon to authenticate and authorize users.
+      </para>
+
+      <para>
+         The XML configuration file conforms to the DTD given by <xref linkend="Defining_Security_Domains-The_XMLLoginConfig_DTD"/>. This DTD can be found in                                                           <filename>docs/dtd/security_config.dtd</filename>.
+      </para>
+
+      <figure id="Defining_Security_Domains-The_XMLLoginConfig_DTD">
+         <title>The XMLLoginConfig DTD</title>
+         <mediaobject>
+            <imageobject>
+               <imagedata align="center" fileref="images/security_config_policy.jpg"/>
+            </imageobject>
+         </mediaobject>
+         <mediaobject>
+            <imageobject>
+               <imagedata align="center" fileref="images/security_config_login_module.jpg"/>
+            </imageobject>
+         </mediaobject>
+      </figure>
+
+      <example id="exam-Login_Module_Intro_Example">
+         <title/>
+         <para>
+            This example describes a simple configuration named jmx-console that is backed by a single login module. The login module is configured by a simple set of name/value configuration pairs that have            meaning to the login module in question. We&apos;ll see what these options mean later, for now we&apos;ll just be concerned with the structure of the configuration file.
+         </para>
+
+         <programlisting language="XML" role="XML">&lt;application-policy name=&quot;example&quot;&gt;
+    &lt;authentication&gt;
+        &lt;login-module code=&quot;org.jboss.security.auth.spi.UsersRolesLoginModule&quot; 
+                                         flag=&quot;required&quot;&gt;
+            &lt;module-option name=&quot;usersProperties&quot;&gt;users.properties&lt;/module-option&gt;
+            &lt;module-option name=&quot;rolesProperties&quot;&gt;roles.properties&lt;/module-option&gt;
+        &lt;/login-module&gt;
+    &lt;/authentication&gt;
+&lt;/application-policy&gt;
+         </programlisting>
+      </example>
+
+      <para>
+         The <literal>name</literal> attribute of the <markup>application-policy</markup> is the login configuration name. Applications policy elements are bound by that name in JNDI under the the                    <literal>java:/jaas</literal> context. Applications will link to security domains through this JNDI name in their deployment descriptors. (See the <markup>&lt;security-domain&gt;</markup> elements           in <filename>jboss.xml</filename>, <filename>jboss-web.xml</filename> and <filename>jboss-service.xml</filename> files for examples)
+      </para>
+
+      <para>
+         The <literal>code</literal> attribute of the <markup>login-module</markup> element specifies the class name of the login module implementation. The <literal>required</literal> flag attribute                 controls the overall behavior of the authentication stack. The allowed values and meanings are:
+      </para>
+
+      <variablelist>
+         <varlistentry>
+            <term>required</term>
+            <listitem>
+               <para>
+                  The login module is required to succeed for the authentication to be successful. If any required module fails, the authentication will fail. The remaining login modules in the stack will be                  called regardless of the outcome of the authentication.
+               </para>
+            </listitem>
+         </varlistentry>
+         <varlistentry>
+            <term>requisite</term>
+            <listitem>
+               <para>
+                  The login module is required to succeed. If it succeeds, authentication continues down the login stack. If it fails, control immediately returns to the application.
+               </para>
+            </listitem>
+         </varlistentry>
+         <varlistentry>
+            <term>sufficient</term>
+            <listitem>
+               <para>
+                  The login module is not required to succeed. If it does succeed, control immediately returns to the application. If it fails, authentication continues down the login stack.
+               </para>
+            </listitem>
+         </varlistentry>
+         <varlistentry>
+            <term>optional</term>
+            <listitem>
+               <para>
+                  The login module is not required to succeed. Authentication still continues to proceed down the login stack regardless of whether the login module succeeds or fails.
+               </para>
+            </listitem>
+         </varlistentry>
+      </variablelist>
+
+      <example>
+         <title>Security Domain using Multiple Login Modules</title>
+         <para>
+            This example shows the definition of a security domain that uses multiple login modules. Since both modules are marked as sufficient, only one of them must succeed for login to proceed.
+         </para>
+
+         <programlisting language="XML" role="XML">&lt;application-policy name=&quot;todo&quot;&gt;
+    &lt;authentication&gt;
+        &lt;login-module code=&quot;org.jboss.security.auth.spi.LdapLoginModule&quot; 
+                      flag=&quot;sufficient&quot;&gt;
+            &lt;!-- LDAP configuration --&gt;
+        &lt;/login-module&gt;
+        &lt;login-module code=&quot;org.jboss.security.auth.spi.DatabaseServerLoginModule&quot; 
+                      flag=&quot;sufficient&quot;&gt;
+            &lt;!-- database configuration --&gt;
+        &lt;/login-module&gt;
+    &lt;/authentication&gt;
+&lt;/application-policy&gt;
+         </programlisting>
+      </example>
+
+      <para>
+         Each login module has its own set of configuration options. These are set as name/value pairs using the <markup>module-option</markup> elements. Module options are covered in more depth when we look         at the individual login modules available in JBoss AS.
+      </para>
+   </chapter>

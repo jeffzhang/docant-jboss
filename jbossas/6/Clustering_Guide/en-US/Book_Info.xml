@@ -1,0 +1,20 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE bookinfo PUBLIC "-//OASIS//DTD DocBook XML V4.3//EN" "http://www.oasis-open.org/docbook/xml/4.3/docbookx.dtd" [ ]>
+
+<bookinfo>
+<title>JBoss AS 5.1 Clustering Guide</title>
+	<subtitle>High Availability Enterprise Services with JBoss Application Server Clusters</subtitle>
+	<!-- <edition>2</edition>
+	<issuenum>2</issuenum>
+	<pubsnumber>2</pubsnumber>-->
+	<productname>JBoss Application Server</productname>
+	<productnumber>5.1</productnumber>
+	<pubdate>Sep 2009</pubdate>
+	<abstract>
+		<para>
+			This book is the JBoss Application Server 5 Clustering Guide.
+		</para>
+	</abstract>
+	<!-- <subtitle>Authors</subtitle>-->
+	<xi:include href="Author_Group.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+</bookinfo>

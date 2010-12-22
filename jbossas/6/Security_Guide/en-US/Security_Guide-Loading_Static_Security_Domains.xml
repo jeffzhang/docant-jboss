@@ -1,0 +1,70 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd">
+
+   <chapter id="Loading_Static_Security_Domains">
+      <title>Loading Static Security Domains</title>
+      <para>
+         Authentication security domains are configured statically in the <filename>/server/<replaceable>$PROFILE</replaceable>/conf/login-config.xml</filename> file, or deployed using                                <filename>jboss-beans.xml</filename> deployment descriptors. For static domains, the <literal>XMLLoginConfig</literal> bean is responsible for loading security configurations specified in                    <filename>login-config.xml</filename>. The bean definition is located in the <filename>/server/<replaceable>$PROFILE</replaceable>/deploy/security/security-jboss-beans.xml</filename> file. The               bean is defined as shown below.
+      </para>
+
+      <programlisting language="XML" role="XML">&lt;bean name=&quot;XMLLoginConfig&quot; class=&quot;org.jboss.security.auth.login.XMLLoginConfig&quot;&gt;
+    &lt;property name=&quot;configResource&quot;&gt;login-config.xml&lt;/property&gt;
+&lt;/bean&gt;
+      </programlisting>
+
+      <para>
+         The bean supports the following attributes:
+      </para>
+
+      <variablelist>
+         <varlistentry>
+            <term>configURL</term>
+            <listitem>
+               <para>
+                  Specifies the URL of the XML login configuration file that should be loaded by this MBean on startup. This must be a valid URL string representation.
+               </para>
+            </listitem>
+         </varlistentry>
+         <varlistentry>
+            <term>configResource</term>
+            <listitem>
+               <para>
+                  Specifies the resource name of the XML login configuration file that should be loaded by this MBean on startup. The name is treated as a classpath resource for which a URL is located using                   the thread context class loader.
+               </para>
+            </listitem>
+         </varlistentry>
+         <varlistentry>
+            <term>validateDTD</term>
+            <listitem>
+               <para>
+                  Specifies whether the XML configuration should be validated against its DTD. This defaults to true.
+               </para>
+            </listitem>
+         </varlistentry>
+      </variablelist>
+
+      <para>
+         The <literal>SecurityConfig</literal> bean is responsible for selecting the <literal>javax.security.auth.login.Configuration</literal> to be used. The default configuration simply references the             <literal>XMLLoginConfig</literal> bean.
+      </para>
+
+      <programlisting language="XML" role="XML">&lt;bean name=&quot;SecurityConfig&quot; class=&quot;org.jboss.security.plugins.SecurityConfig&quot;&gt;
+    &lt;property name=&quot;mbeanServer&quot;&gt;&lt;inject bean=&quot;JMXKernel&quot; property=&quot;mbeanServer&quot;/&gt;&lt;/property&gt;
+    &lt;property name=&quot;defaultLoginConfig&quot;&gt;&lt;inject bean=&quot;XMLLoginConfig&quot;/&gt;&lt;/property&gt;
+&lt;/bean&gt;
+      </programlisting>
+
+      <para>
+         There is one configurable attribute:
+      </para>
+
+      <variablelist>
+         <varlistentry>
+            <term>defaultLoginConfig</term>
+            <listitem>
+               <para>
+                  Specifies the bean name of the MC bean that provides the default JAAS login configuration. When the <literal>SecurityConfig</literal> is started, this bean is queried for its                                 <literal>javax.security.auth.login.Configuration</literal> by calling its <literal>getConfiguration(Configuration currentConfig)</literal> operation. If the                                                   <literal>defaultLoginConfig</literal> attribute is not specified then the default Sun <literal>Configuration</literal> implementation described in the <classname>Configuration</classname>                    class JavaDocs is used
+               </para>
+            </listitem>
+         </varlistentry>
+      </variablelist>
+   </chapter>

@@ -1,0 +1,639 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.3//EN" "http://www.oasis-open.org/docbook/xml/4.3/docbookx.dtd">
+
+<chapter id="clustering-session">
+  <title>Clustered Session EJBs</title>
+  <para>
+    Session EJBs provide remote invocation services.
+    They are clustered based on the client-side interceptor architecture.
+    The client application for a clustered session bean is the same as the client for the non-clustered version of the session bean, except for some minor changes.
+    No code change or re-compilation is needed on the client side.
+    Now, let's check out how to configure clustered session beans in EJB 3.0 and EJB 2.x server applications respectively.
+  </para>
+
+  <section id="clustering-session-slsb30">
+    <title>Stateless Session Bean in EJB 3.0</title>
+    <para>
+      Clustering stateless session beans is probably the easiest case since no state is involved.
+      Calls can be load balanced to any participating node (i.e. any node that has this specific bean deployed) of the cluster.
+    </para>
+    <para>
+      To cluster a stateless session bean in EJB 3.0, simply annotate the bean class with the <literal>@Clustered</literal> annotation.
+      This annotation contains optional parameters for overriding both the load balance policy and partition to use.
+    </para>
+<programlisting id="clustered-annoation"><![CDATA[public @interface Clustered
+{
+   String partition() default "${jboss.partition.name:DefaultPartition}";
+   String loadBalancePolicy() default "LoadBalancePolicy";
+}]]></programlisting>
+    <itemizedlist>
+      <listitem>
+        <para>
+          <emphasis role="bold">partition</emphasis> specifies the name of the cluster the bean participates in.
+          While the <literal>@Clustered</literal> annotation lets you override the default partition, <literal>DefaultPartition</literal>, for an individual bean, you can override this for all beans using the <literal>jboss.partition.name</literal> system property.
+        </para>
+      </listitem>
+      <listitem>
+        <para>
+          <emphasis role="bold">loadBalancePolicy</emphasis> defines the name of a class implementing <literal>org.jboss.ha.client.loadbalance.LoadBalancePolicy</literal>, indicating how the bean stub should balance calls made on the nodes of the cluster.
+          The default value, <literal>LoadBalancePolicy</literal> is a special token indicating the default policy for the session bean type.
+          For stateless session beans, the default policy is <literal>org.jboss.ha.client.loadbalance.RoundRobin</literal>.
+          You can override the default value using your own implementation, or choose one from the list of available policies:
+        </para>
+        <variablelist>
+          <varlistentry>
+            <term><literal>org.jboss.ha.client.loadbalance.RoundRobin</literal></term>
+            <listitem><para>Starting with a random target, always favors the next available target in the list, ensuring maximum load balancing always occurs.</para></listitem>
+          </varlistentry>
+        </variablelist>
+        <variablelist>
+          <varlistentry>
+            <term><literal>org.jboss.ha.client.loadbalance.RandomRobin</literal></term>
+            <listitem><para>Randomly selects its target without any consideration to previously selected targets.</para></listitem>
+          </varlistentry>
+        </variablelist>
+        <variablelist>
+          <varlistentry>
+            <term><literal>org.jboss.ha.client.loadbalance.aop.FirstAvailable</literal></term>
+            <listitem>
+              <para>
+                Once a target is chosen, always favors that same target; i.e. no further load balancing occurs.
+                Useful in cases where "sticky session" behavior is desired, e.g. stateful session beans.
+              </para>
+            </listitem>
+          </varlistentry>
+        </variablelist>
+        <variablelist>
+          <varlistentry>
+            <term><literal>org.jboss.ha.client.loadbalance.aop.FirstAvailableIdenticalAllProxies</literal></term>
+            <listitem><para>Similar to <literal>FirstAvailable</literal>, except that the favored target is shared across all proxies.</para></listitem>
+          </varlistentry>
+        </variablelist>
+      </listitem>
+    </itemizedlist>
+    <para>Here is an example of a clustered EJB 3.0 stateless session bean implementation.</para>
+<programlisting><![CDATA[@Stateless
+@Clustered
+public class MyBean implements MySessionInt
+{
+   public void test()
+   {
+      // Do something cool
+   }
+}]]></programlisting>
+    <para>
+       Rather than using the <literal>@Clustered</literal> annotation, you can also enable clustering for a session bean in jboss.xml:
+    </para>
+<programlisting><![CDATA[<jboss>    
+   <enterprise-beans>
+      <session>
+         <ejb-name>NonAnnotationStateful</ejb-name>
+         <clustered>true</clustered>
+         <cluster-config>
+            <partition-name>FooPartition</partition-name>
+            <load-balance-policy>
+               org.jboss.ha.framework.interfaces.RandomRobin
+            </load-balance-policy>
+         </cluster-config>
+      </session>    
+   </enterprise-beans>
+</jboss>]]></programlisting>
+
+    <note>
+      <para>
+        The <literal>&lt;clustered&gt;true&lt;/clustered&gt;</literal> element is really just an alias for the <literal>&lt;container-name&gt;Clustered Stateless SessionBean&lt;/container-name&gt;</literal> element in the conf/standardjboss.xml file.
+      </para>
+    </note>
+
+    <para>
+      In the bean configuration, only the &lt;clustered&gt; element is necessary to indicate that the bean needs to support clustering features.
+      The default values for the optional &lt;cluster-config&gt; elements match those of the corresponding properties from the <literal>@Clustered</literal> annotation.
+    </para>
+  </section>
+
+
+  <section id="clustering-session-sfsb30">
+    <title>Stateful Session Beans in EJB 3.0</title>
+    <para>
+      Clustering stateful session beans is more complex than clustering their stateless counterparts since JBoss needs to manage the state information.
+      The state of all stateful session beans are replicated and synchronized across the cluster each time the state of a bean changes.
+    </para>
+    
+    <section>
+      <title>The EJB application configuration</title>
+      <para>
+        To cluster stateful session beans in EJB 3.0, you need to tag the bean implementation class with the <literal>@Clustered</literal> annotation, just as we did with the EJB 3.0 stateless session bean earlier.
+        In contrast to stateless session beans, stateful session bean method invocations are load balanced using <literal>org.jboss.ha.client.loadbalance.aop.FirstAvailable</literal> policy, by default.
+        Using this policy, methods invocations will stick to a randomly chosen node.
+      </para>
+      <para>
+        The <literal>@org.jboss.ejb3.annotation.CacheConfig</literal> annotation can also be applied to the bean to override the default caching behavior.
+        Below is the definition of the <literal>@CacheConfig</literal> annotation:
+      </para>
+<programlisting><![CDATA[public @interface CacheConfig
+{
+   String name() default "";
+   int maxSize() default 10000;
+   long idleTimeoutSeconds() default 300;   
+   boolean replicationIsPassivation() default true;   
+   long removalTimeoutSeconds() default 0;
+}]]></programlisting>
+
+      <itemizedlist>
+        <listitem><para><literal>name</literal> specifies the name of a cache configuration registered with the <literal>CacheManager</literal> service discussed in <xref linkend="sfsb-jbc-cachemanager"/>.  By default, the <literal>sfsb-cache</literal> configuration will be used.</para></listitem>
+        <listitem><para><literal>maxSize</literal> specifies the maximum number of beans that can cached before the cache should start passivating beans, using an LRU algorithm.</para></listitem>
+        <listitem><para><literal>idleTimeoutSeconds</literal> specifies the max period of time a bean can go unused before the cache should passivate it (irregardless of whether maxSize beans are cached.)</para></listitem>
+        <listitem><para><literal>removalTimeoutSeconds</literal> specifies the max period of time a bean can go unused before the cache should remove it altogether.</para></listitem>
+        <listitem><para><literal>replicationIsPassivation</literal> specifies whether the cache should consider a replication as being equivalent to a passivation, and invoke any @PrePassivate and @PostActivate callbacks on the bean. By default true, since replication involves serializing the bean, and preparing for and recovering from serialization is a common reason for implementing the callback methods.</para></listitem>
+      </itemizedlist>
+      
+      <para>Here is an example of a clustered EJB 3.0 stateful session bean implementation.</para>
+<programlisting><![CDATA[@Stateful
+@Clustered
+@CacheConfig(maxSize=5000, removalTimeoutSeconds=18000)
+public class MyBean implements MySessionInt
+{
+   private int state = 0;
+
+   public void increment()
+   {
+      System.out.println("counter: " + (state++));
+   }
+}]]></programlisting>
+
+      <para>
+        As with stateless beans, the @Clustered annotation can alternatively be omitted and the clustering configuration instead applied to jboss.xml:
+      </para>
+<programlisting><![CDATA[<jboss>    
+   <enterprise-beans>
+      <session>
+         <ejb-name>NonAnnotationStateful</ejb-name>
+         <clustered>true</clustered>
+         <cache-config>
+            <cache-max-size>5000</cache-max-size>
+            <remove-timeout-seconds>18000</remove-timeout-seconds>
+         </cache-config>
+      </session>    
+   </enterprise-beans>
+</jboss>]]></programlisting>
+    </section>
+    
+    <section>
+      <title>Optimize state replication</title>
+      <para>
+        As the replication process is a costly operation, you can optimise this behaviour by
+        optionally implementing the org.jboss.ejb3.cache.Optimized interface in your bean class:
+      </para>
+<programlisting><![CDATA[public interface Optimized
+{
+   boolean isModified();
+}]]></programlisting>
+      <para>
+        Before replicating your bean, the container will check if your bean implements the <literal>Optimized</literal> interface.
+        If this is the case, the container calls the <literal>isModified()</literal> method and will only replicate the bean when the method returns <literal>true</literal>.
+        If the bean has not been modified (or not enough to require replication, depending on your own preferences), you can return <literal>false</literal> and the replication would not occur.
+      </para>
+    </section>
+
+    <section id="sfsb-jbc-cachemanager">
+      <title>CacheManager service configuration</title>
+      <para>
+        JBoss Cache provides the session state replication service for EJB 3.0 stateful session beans.
+        The <literal>CacheManager</literal> service, described in <xref linkend="clustering-blocks-jbc-cachemanager"/> is both a factory and registry of JBoss Cache instances.
+        By default, stateful session beans use the <literal>sfsb-cache</literal> configuration from the <literal>CacheManager</literal>, defined as follows:
+      </para>
+<programlisting><![CDATA[<bean name="StandardSFSBCacheConfig" class="org.jboss.cache.config.Configuration">
+
+  <!--  No transaction manager lookup -->
+  
+  <!-- Name of cluster. Needs to be the same for all members -->
+  <property name="clusterName">
+    ${jboss.partition.name:DefaultPartition}-SFSBCache
+  </property>
+  <!--
+    Use a UDP (multicast) based stack. Need JGroups flow control (FC)
+    because we are using asynchronous replication.
+  -->
+  <property name="multiplexerStack">${jboss.default.jgroups.stack:udp}</property>
+  <property name="fetchInMemoryState">true</property>
+  
+  <property name="nodeLockingScheme">PESSIMISTIC</property>
+  <property name="isolationLevel">REPEATABLE_READ</property>
+  <property name="useLockStriping">false</property>
+  <property name="cacheMode">REPL_ASYNC</property>
+  
+  <!--
+    Number of milliseconds to wait until all responses for a
+    synchronous call have been received. Make this longer 
+    than lockAcquisitionTimeout.
+  -->
+  <property name="syncReplTimeout">17500</property>
+  <!-- Max number of milliseconds to wait for a lock acquisition -->
+  <property name="lockAcquisitionTimeout">15000</property>
+  <!-- The max amount of time (in milliseconds) we wait until the
+  state (ie. the contents of the cache) are retrieved from
+  existing members at startup. -->
+  <property name="stateRetrievalTimeout">60000</property>
+  
+  <!--
+    SFSBs use region-based marshalling to provide for partial state
+    transfer during deployment/undeployment.
+  -->
+  <property name="useRegionBasedMarshalling">false</property>
+  <!-- Must match the value of "useRegionBasedMarshalling" -->
+  <property name="inactiveOnStartup">false</property>
+  
+  <!-- Disable asynchronous RPC marshalling/sending -->
+  <property name="serializationExecutorPoolSize">0</property>        
+  <!-- We have no asynchronous notification listeners -->
+  <property name="listenerAsyncPoolSize">0</property>
+  
+  <property name="exposeManagementStatistics">true</property>
+  
+  <property name="buddyReplicationConfig">
+    <bean class="org.jboss.cache.config.BuddyReplicationConfig">
+    
+      <!--  Just set to true to turn on buddy replication -->
+      <property name="enabled">false</property>
+      
+      <!--
+        A way to specify a preferred replication group.  We try
+        and pick a buddy who shares the same pool name (falling 
+        back to other buddies if not available).
+      -->
+      <property name="buddyPoolName">default</property>
+      
+      <property name="buddyCommunicationTimeout">17500</property>
+      
+      <!-- Do not change these -->
+      <property name="autoDataGravitation">false</property>
+      <property name="dataGravitationRemoveOnFind">true</property>
+      <property name="dataGravitationSearchBackupTrees">true</property>
+               
+      <property name="buddyLocatorConfig">
+        <bean class="org.jboss.cache.buddyreplication.NextMemberBuddyLocatorConfig">
+          <!-- The number of backup nodes we maintain -->
+          <property name="numBuddies">1</property>
+          <!-- Means that each node will *try* to select a buddy on 
+               a different physical host. If not able to do so 
+               though, it will fall back to colocated nodes. -->
+          <property name="ignoreColocatedBuddies">true</property>
+        </bean>
+      </property>
+    </bean>
+  </property>
+  <property name="cacheLoaderConfig">
+    <bean class="org.jboss.cache.config.CacheLoaderConfig">
+      <!-- Do not change these -->
+      <property name="passivation">true</property>
+      <property name="shared">false</property>
+      
+      <property name="individualCacheLoaderConfigs">
+        <list>
+          <bean class="org.jboss.cache.loader.FileCacheLoaderConfig">
+            <!-- Where passivated sessions are stored -->
+            <property name="location">${jboss.server.data.dir}${/}sfsb</property>
+            <!-- Do not change these -->
+            <property name="async">false</property>
+            <property name="fetchPersistentState">true</property>
+            <property name="purgeOnStartup">true</property>
+            <property name="ignoreModifications">false</property>
+            <property name="checkCharacterPortability">false</property>
+          </bean>
+        </list>
+      </property>
+    </bean>
+  </property>
+
+  <!-- EJBs use JBoss Cache eviction -->
+  <property name="evictionConfig">
+    <bean class="org.jboss.cache.config.EvictionConfig">
+      <property name="wakeupInterval">5000</property>
+      <!--  Overall default -->
+      <property name="defaultEvictionRegionConfig">
+        <bean class="org.jboss.cache.config.EvictionRegionConfig">
+          <property name="regionName">/</property>
+          <property name="evictionAlgorithmConfig">
+            <bean class="org.jboss.cache.eviction.NullEvictionAlgorithmConfig"/>
+          </property>
+        </bean>
+      </property>
+      <!-- EJB3 integration code will programatically create other regions as beans are deployed -->
+    </bean>
+  </property>
+</bean>]]></programlisting>
+      
+      <simplesect>
+        <title>Eviction</title>
+        <para>
+          The default SFSB cache is configured to support eviction. 
+          The EJB3 SFSB container uses the JBoss Cache eviction mechanism to manage SFSB passivation.
+          When beans are deployed, the EJB container will programatically add eviction regions to the cache, one region per bean type.
+        </para>
+      </simplesect>
+      <simplesect>
+        <title>CacheLoader</title>
+        <para>
+          A JBoss Cache CacheLoader is also configured; again to support SFSB passivation.
+          When beans are evicted from the cache, the cache loader passivates them to a persistent store;
+          in this case to the filesystem in the $JBOSS_HOME/server/all/data/sfsb directory.
+          JBoss Cache supports a variety of different CacheLoader implementations that know how to store
+          data to different persistent store types; see the JBoss Cache documentation for details.
+          However, if you change the CacheLoaderConfiguration, be sure that you do not use a shared store, e.g. a single schema in a shared database.
+          Each node in the cluster must have its own persistent store, otherwise as nodes independently passivate and activate clustered beans, they will corrupt each other's data.
+        </para>
+      </simplesect>
+      <simplesect>
+        <title>Buddy Replication</title>
+        <para>
+          Using buddy replication, state is replicated to a configurable number of backup servers in the cluster (aka buddies), rather than to all servers in the cluster.
+          To enable buddy replication, adjust the following properties in the <literal>buddyReplicationConfig</literal> property bean:
+        </para>
+        <itemizedlist>
+          <listitem>
+            <para>
+              Set <literal>enabled</literal> to <literal>true</literal>.
+            </para>
+          </listitem>
+          <listitem>
+            <para>
+              Use the <literal>buddyPoolName</literal> to form logical subgroups of nodes within the cluster.
+              If possible, buddies will be chosen from nodes in the same buddy pool.
+            </para>
+          </listitem>
+          <listitem>
+            <para>
+              Adjust the <literal>buddyLocatorConfig.numBuddies</literal> property to reflect the number of backup nodes to which each node should replicate its state.
+            </para>
+          </listitem>
+        </itemizedlist>
+      </simplesect>
+    </section>
+  </section>
+
+
+  <section id="clustering-session-slsb21">
+    <title>Stateless Session Bean in EJB 2.x</title>
+    <para>
+      To make an EJB 2.x bean clustered, you need to modify its <literal>jboss.xml</literal>
+      descriptor to contain a <literal>&lt;clustered&gt;</literal> tag.
+    </para>
+<programlisting><![CDATA[<jboss>
+  <enterprise-beans>
+    <session>
+      <ejb-name>nextgen.StatelessSession</ejb-name>
+      <jndi-name>nextgen.StatelessSession</jndi-name>
+      <clustered>true</clustered>
+      <cluster-config>
+        <partition-name>DefaultPartition</partition-name>
+        <home-load-balance-policy>
+           org.jboss.ha.framework.interfaces.RoundRobin
+        </home-load-balance-policy>
+        <bean-load-balance-policy>
+           org.jboss.ha.framework.interfaces.RoundRobin
+        </bean-load-balance-policy>
+      </cluster-config>
+    </session>
+  </enterprise-beans>
+</jboss>]]></programlisting>
+    
+    <itemizedlist>
+      <listitem>
+        <para>
+          <emphasis role="bold">partition-name</emphasis> specifies the name of the cluster the bean
+          participates in. The default value is <literal>DefaultPartition</literal>. The default
+          partition name can also be set system-wide using the <literal>jboss.partition.name</literal>
+          system property.
+        </para>
+      </listitem>
+      <listitem>
+        <para>
+          <emphasis role="bold">home-load-balance-policy</emphasis> indicates the class to be used
+          by the home stub to balance calls made on the nodes of the cluster. By default, the proxy
+          will load-balance calls in a <literal>RoundRobin</literal> fashion.
+        </para>
+      </listitem>
+      <listitem>
+        <para>
+          <emphasis role="bold">bean-load-balance-policy</emphasis> Indicates the class to be used
+          by the bean stub to balance calls made on the nodes of the cluster. By default, the proxy
+          will load-balance calls in a <literal>RoundRobin</literal> fashion.
+        </para>
+      </listitem>
+    </itemizedlist>
+  </section>
+
+  <section id="clustering-session-sfsb21">
+    <title>Stateful Session Bean in EJB 2.x</title>
+    <para>
+      Clustering stateful session beans is more complex than clustering their stateless counterparts
+      since JBoss needs to manage the state information. The state of all stateful session beans are
+      replicated and synchronized across the cluster each time the state of a bean changes. The JBoss AS
+      uses the <literal>HASessionStateService</literal> bean to manage distributed session states for clustered
+      EJB 2.x stateful session beans. In this section, we cover both the session bean configuration and
+      the <literal>HASessionStateService</literal> bean configuration.
+    </para>
+    
+    <section>
+      <title>The EJB application configuration</title>
+      <para>
+        In the EJB application, you need to modify the <literal>jboss.xml</literal> descriptor file
+        for each stateful session bean and add the <literal>&lt;clustered&gt;</literal> tag.
+      </para>
+<programlisting><![CDATA[<jboss>    
+  <enterprise-beans>
+    <session>        
+      <ejb-name>nextgen.StatefulSession</ejb-name>
+      <jndi-name>nextgen.StatefulSession</jndi-name>
+      <clustered>True</clustered>
+      <cluster-config>
+        <partition-name>DefaultPartition</partition-nam>
+        <home-load-balance-policy>
+           org.jboss.ha.framework.interfaces.RoundRobin
+        </home-load-balance-policy>
+        <bean-load-balance-policy>
+           org.jboss.ha.framework.interfaces.FirstAvailable
+        </bean-load-balance-policy>          
+        <session-state-manager-jndi-name>
+           /HASessionState/Default
+        </session-state-manager-jndi-name>        
+      </cluster-config>
+    </session>
+  </enterprise-beans>
+</jboss>]]></programlisting>
+      <para>
+        In the bean configuration, only the <literal>&lt;clustered&gt;</literal> tag is mandatory to
+        indicate that the bean works in a cluster. The <literal>&lt;cluster-config&gt;</literal>
+        element is optional and its default attribute values are indicated in the sample configuration above.
+      </para>
+      <para>
+        The <literal>&lt;session-state-manager-jndi-name&gt;</literal> tag is used to give the JNDI
+        name of the <literal>HASessionStateService</literal> to be used by this bean.
+      </para>
+      <para>
+        The description of the remaining tags is identical to the one for stateless session bean.
+        Actions on the clustered stateful session bean's home interface are by default load-balanced,
+        round-robin. Once the bean's remote stub is available to the client, calls will not be
+        load-balanced round-robin any more and will stay "sticky" to the first node in the list.
+      </para>
+    </section>
+    <section>
+      <title>Optimize state replication</title>
+      <para>
+        As the replication process is a costly operation, you can optimise this behaviour by
+        optionally implementing in your bean class a method with the following signature:
+      </para>
+<programlisting>public boolean isModified();</programlisting>
+      <para>
+        Before replicating your bean, the container will detect if your bean implements this method.
+        If your bean does, the container calls the <literal>isModified()</literal> method and it only
+        replicates the bean when the method returns <literal>true</literal>. If the bean has not been
+        modified (or not enough to require replication, depending on your own preferences), you can
+        return <literal>false</literal> and the replication would not occur. This feature is available
+        on JBoss AS 3.0.1+ only.
+      </para>
+    </section>
+    <section>
+      <title>The HASessionStateService configuration</title>
+      <para>
+        The <literal>HASessionStateService</literal> bean is defined in the
+        <code>all/deploy/cluster/ha-legacy-jboss-beans.xml</code> file.</para>
+<programlisting><![CDATA[<bean name="HASessionStateService"
+      class="org.jboss.ha.hasessionstate.server.HASessionStateService">
+  
+  <annotation>@org.jboss.aop.microcontainer.aspects.jmx.JMX(...)</annotation>
+  
+  <!--  Partition used for group RPCs -->
+  <property name="HAPartition"><inject bean="HAPartition"/></property>
+  
+  <!-- JNDI name under which the service is bound -->
+  <property name="jndiName">/HASessionState/Default</property>
+  <!-- Max delay before cleaning unreclaimed state.
+       Defaults to 30*60*1000 => 30 minutes -->
+  <property name="beanCleaningDelay">0</property>
+   
+</bean>]]></programlisting>
+
+      <para>The configuration attributes in the <literal>HASessionStateService</literal> bean are listed below.</para>
+        <itemizedlist>
+        <listitem>
+          <para>
+            <emphasis role="bold">HAPartition</emphasis> is a required attribute to inject the HAPartition service that HA-JNDI uses for intra-cluster communication.
+          </para>
+        </listitem>
+        <listitem>
+          <para>
+            <emphasis role="bold">jndiName</emphasis> is an optional attribute to specify the JNDI
+            name under which this <literal>HASessionStateService</literal> bean is bound. The default
+            value is <literal>/HAPartition/Default</literal>.
+          </para>
+        </listitem>
+        <listitem>
+          <para>
+            <emphasis role="bold">beanCleaningDelay</emphasis> is an optional attribute to specify
+            the number of miliseconds after which the <literal>HASessionStateService</literal> can
+            clean a state that has not been modified. If a node, owning a bean, crashes, its brother
+            node will take ownership of this bean. Nevertheless, the container cache of the brother
+            node will not know about it (because it has never seen it before) and will never delete
+            according to the cleaning settings of the bean. That is why the
+            <literal>HASessionStateService</literal> needs to do this cleanup sometimes. The
+            default value is <literal>30*60*1000</literal> milliseconds (i.e., 30 minutes).
+          </para>
+        </listitem>
+      </itemizedlist>
+    </section>
+    <section><title>Handling Cluster Restart</title>
+      <para>
+        We have covered the HA smart client architecture in the section called “Client-side interceptor architecture”. The default HA smart proxy client can only failover as long as one node in the cluster exists. If there is a complete cluster shutdown, the proxy becomes orphaned and loses knowledge of the available nodes in the cluster. There is no way for the proxy to recover from this. The proxy needs to look up a fresh set of targets out of JNDI/HAJNDI when the nodes are restarted.
+      </para>
+      <para>
+        The 3.2.7+/4.0.2+ releases contain a RetryInterceptor that can be added to the proxy client side interceptor stack to allow for a transparent recovery from such a restart failure. To enable it for an EJB, setup an invoker-proxy-binding that includes the RetryInterceptor. Below is an example jboss.xml configuration.
+      </para>
+<programlisting><![CDATA[<jboss>
+  <session>
+    <ejb-name>nextgen_RetryInterceptorStatelessSession</ejb-name>
+    <invoker-bindings>
+      <invoker>
+        <invoker-proxy-binding-name>
+           clustered-retry-stateless-rmi-invoker
+        </invoker-proxy-binding-name>
+        <jndi-name>nextgen_RetryInterceptorStatelessSession</jndi-name>
+      </invoker>
+    </invoker-bindings>
+    <clustered>true</clustered>
+  </session>
+  <invoker-proxy-binding>
+    <name>clustered-retry-stateless-rmi-invoker</name>
+    <invoker-mbean>jboss:service=invoker,type=jrmpha</invoker-mbean>
+    <proxy-factory>org.jboss.proxy.ejb.ProxyFactoryHA</proxy-factory>
+    <proxy-factory-config>
+      <client-interceptors>
+        <home>
+          <interceptor>org.jboss.proxy.ejb.HomeInterceptor</interceptor>
+          <interceptor>org.jboss.proxy.SecurityInterceptor</interceptor>
+          <interceptor>org.jboss.proxy.TransactionInterceptor</interceptor>
+          <interceptor>org.jboss.proxy.ejb.RetryInterceptor</interceptor>
+          <interceptor>org.jboss.invocation.InvokerInterceptor</interceptor>
+        </home>
+        <bean>
+          <interceptor>org.jboss.proxy.ejb.StatelessSessionInterceptor</interceptor>
+          <interceptor>org.jboss.proxy.SecurityInterceptor</interceptor>
+          <interceptor>org.jboss.proxy.TransactionInterceptor</interceptor>
+          <interceptor>org.jboss.proxy.ejb.RetryInterceptor</interceptor>
+          <interceptor>org.jboss.invocation.InvokerInterceptor</interceptor>
+        </bean>
+      </client-interceptors>
+    </proxy-factory-config>
+  </invoker-proxy-binding>
+</jboss>]]></programlisting>
+    </section>
+
+    <section>
+      <title>JNDI Lookup Process</title>
+      <para>
+        In order to recover the HA proxy, the RetryInterceptor does a lookup in JNDI.
+        This means that internally it creates a new InitialContext and does a JNDI lookup.
+        But, for that lookup to succeed, the InitialContext needs to be configured properly to find your naming server.
+        The RetryInterceptor will go through the following steps in attempting to determine the proper naming environment properties:
+      </para>
+      <orderedlist>
+        <listitem>
+          <para>
+            It will check its own static retryEnv field.
+            This field can be set by client code via a call to RetryInterceptor.setRetryEnv(Properties).
+            This approach to configuration has two downsides:
+            first, it reduces portability by introducing JBoss-specific calls to the client code;
+            and second, since a static field is used only a single configuration per JVM is possible. 
+          </para>
+        </listitem>
+        <listitem>
+          <para>
+            If the retryEnv field is null, it will check for any environment properties bound to a ThreadLocal by the org.jboss.naming.NamingContextFactory class.
+            To use this class as your naming context factory, in your jndi.properties set property java.naming.factory.initial=org.jboss.naming.NamingContextFactory.
+            The advantage of this approach is use of org.jboss.naming.NamingContextFactory is simply a configuration option in your jndi.properties file, and thus your java code is unaffected.
+            The downside is the naming properties are stored in a ThreadLocal and thus are only visible to the thread that originally created an InitialContext. 
+          </para>
+        </listitem>
+        <listitem>
+          <para>
+            If neither of the above approaches yield a set of naming environment properties, a default InitialContext is used.
+            If the attempt to contact a naming server is unsuccessful, by default the InitialContext will attempt to fall back on multicast discovery to find an HA-JNDI naming server.
+            See the section on “ClusteredJNDI Services” for more on multicast discovery of HA-JNDI. 
+          </para>
+        </listitem>
+      </orderedlist>
+    </section>
+
+    <section><title>SingleRetryInterceptor</title>
+      <para>
+        The RetryInterceptor is useful in many use cases, but a disadvantage it has is that it will continue attempting to re-lookup the HA proxy in JNDI until it succeeds. If for some reason it cannot succeed, this process could go on forever, and thus the EJB call that triggered the RetryInterceptor will never return. For many client applications, this possibility is unacceptable. As a result, JBoss doesn't make the RetryInterceptor part of its default client interceptor stacks for clustered EJBs.
+      </para>
+      <para>
+        In the 4.0.4.RC1 release, a new flavor of retry interceptor was introduced, the org.jboss.proxy.ejb.SingleRetryInterceptor. This version works like the RetryInterceptor, but only makes a single attempt to re-lookup the HA proxy in JNDI. If this attempt fails, the EJB call will fail just as if no retry interceptor was used. Beginning with 4.0.4.CR2, the SingleRetryInterceptor is part of the default client interceptor stacks for clustered EJBs.
+      </para>
+      <para>
+        The downside of the SingleRetryInterceptor is that if the retry attempt is made during a portion of a cluster restart where no servers are available, the retry will fail and no further attempts will be made. 
+      </para>
+    </section>
+  </section>
+</chapter>
